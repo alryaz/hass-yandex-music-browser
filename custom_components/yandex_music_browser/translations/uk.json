@@ -1,0 +1,52 @@
+{
+  "title": "Браузер Яндекс Музики",
+  "media_browser": {
+    "library": {
+      "title": "Бібліотека",
+      "folder": "Папка",
+      "folder_user": "Користувачі ",
+      "folder_playlist": "Списки відтворення",
+      "folder_album": "Альбоми",
+      "folder_artist": "Исполнители"
+    },
+    "user_playlists": {
+      "title": "Плейлисти"
+    },
+    "personal_mixes": {
+      "title": "Персональні добірки"
+    },
+    "yandex_mixes": {
+      "title": "Збірки Яндекса"
+    },
+    "user_liked_artists": {
+      "title": "Улюблені исполнители"
+    },
+    "user_liked_albums": {
+      "title": "Улюблені альбоми"
+    },
+    "user_liked_tracks": {
+      "title": "Улюблені треки"
+    },
+    "user_liked_playlists": {
+      "title": "Улюблені списки відтворення"
+    },
+    "user_likes": {
+      "title": "Понравившееся"
+    },
+    "popular_artists": {
+      "title": "Популярні виконавці"
+    },
+    "popular_tracks": {
+      "title": "Популярні треки"
+    },
+    "genres": {
+      "title": "Жанри"
+    },
+    "new_releases": {
+      "title": "Нові альбоми"
+    },
+    "new_playlists": {
+      "title": "Нові списки відтворення"
+    }
+  }
+}

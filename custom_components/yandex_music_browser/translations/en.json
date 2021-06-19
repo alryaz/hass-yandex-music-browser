@@ -1,0 +1,63 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "data": {
+          "debug": "Debug"
+        },
+        "description": "This is the one and only setup step (for now)",
+        "title": "Activate Yandex Music Browser"
+      }
+    }
+  },
+  "title": "Yandex Music Browser",
+  "media_browser": {
+    "library": {
+      "title": "Library",
+      "folder": "Folder",
+      "folder_user": "Users",
+      "folder_playlist": "Playlists",
+      "folder_album": "Albums",
+      "folder_artist": "Artists"
+    },
+    "user_playlists": {
+      "title": "Playlists"
+    },
+    "personal_mixes": {
+      "title": "Personal mixes"
+    },
+    "yandex_mixes": {
+      "title": "Yandex mixes"
+    },
+    "user_liked_artists": {
+      "title": "Liked artists"
+    },
+    "user_liked_albums": {
+      "title": "Liked albums"
+    },
+    "user_liked_tracks": {
+      "title": "Liked tracks"
+    },
+    "user_liked_playlists": {
+      "title": "Liked playlists"
+    },
+    "user_likes": {
+      "title": "Preferences"
+    },
+    "popular_artists": {
+      "title": "Top artists"
+    },
+    "popular_tracks": {
+      "title": "Top tracks"
+    },
+    "genres": {
+      "title": "Music genres"
+    },
+    "new_releases": {
+      "title": "New releases"
+    },
+    "new_playlists": {
+      "title": "New playlists"
+    }
+  }
+}

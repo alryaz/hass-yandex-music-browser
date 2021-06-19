@@ -1,0 +1,18 @@
+{
+  "domain": "yandex_music_browser",
+  "name": "Yandex Music Browser",
+  "version": "v0.0.1",
+  "documentation": "https://github.com/alryaz/hass-mosoblgaz",
+  "dependencies": [
+    "yandex_station"
+  ],
+  "issue_tracker": "https://github.com/alryaz/hass-mosoblgaz/issues",
+  "codeowners": [
+    "@alryaz"
+  ],
+  "config_flow": true,
+  "requirements": [
+    "yandex-music==1.0.0"
+  ],
+  "iot_class": "cloud_polling"
+}

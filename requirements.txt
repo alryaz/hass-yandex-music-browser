@@ -1,0 +1,7 @@
+yandex-music==1.0.0
+homeassistant~=2021.3.4
+voluptuous~=0.12.1
+DateTime~=4.3
+aiohttp~=3.7.4
+zeroconf~=0.28.8
+PyYAML~=5.4.1

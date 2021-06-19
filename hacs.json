@@ -1,0 +1,10 @@
+{
+  "name": "Media browser for Yandex Station",
+  "content_in_root": false,
+  "zip_release": false,
+  "render_readme": true,
+  "domains": [],
+  "country": "ru",
+  "homeassistant": "2021.4.6",
+  "iot_class": "Cloud Polling"
+}

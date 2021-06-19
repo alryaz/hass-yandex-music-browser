@@ -1,0 +1,27 @@
+from typing import Final
+
+DOMAIN = "yandex_music_browser"
+CONF_CACHE_TTL: Final = "cache_ttl"
+CONF_LANGUAGE: Final = "language"
+CONF_SHOW_HIDDEN: Final = "show_hidden"
+CONF_ROOT_OPTIONS: Final = "root_options"
+CONF_THUMBNAIL_RESOLUTION: Final = "thumbnail_resolution"
+CONF_WIDTH: Final = "width"
+CONF_HEIGHT: Final = "height"
+CONF_LYRICS: Final = "lyrics"
+CONF_MENU_OPTIONS: Final = "menu_options"
+CONF_TITLE = "title"
+CONF_IMAGE = "image"
+CONF_CLASS = "class"
+CONF_ITEMS = "items"
+SUPPORTED_BROWSER_LANGUAGES = ("tr", "hy", "ru", "ka", "kk", "be", "uz", "en", "az", "he", "uk")
+MEDIA_TYPE_PODCAST = "podcast"
+MEDIA_TYPE_MIX_TAG = "mix_tag"
+MEDIA_TYPE_GENRE = "genre"
+MEDIA_TYPE_RADIO = "radio"
+MEDIA_TYPE_LIBRARY = "library"
+ROOT_MEDIA_CONTENT_TYPE = MEDIA_TYPE_LIBRARY
+EXPLICIT_UNICODE_ICON_NEGATIVE = u"\U0001F174"
+EXPLICIT_UNICODE_ICON_STANDARD = u"\U0001F134"
+DATA_BROWSER = DOMAIN + "_browser"
+DATA_YAML_CONFIG = DOMAIN + "_yaml_config"
