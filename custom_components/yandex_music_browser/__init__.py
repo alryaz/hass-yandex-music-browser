@@ -273,13 +273,14 @@ async def async_unload_entry(hass: HomeAssistantType, config_entry: ConfigEntry)
 async def _patch_async_play_media(self: "YandexStation", media_type: str, media_id: str, **kwargs):
     if media_type in MAP_MEDIA_TYPE_TO_BROWSE:
         if self.local_state:
-            payload = {"command": "playMusic"}
-            if media_type == MEDIA_TYPE_TRACK:
-                payload["type"] = "track"
-                payload["id"] = media_id
-            if "type" in payload and "id" in payload:
+            if media_type in ("track", "playlist", "album", "artist"):
+                payload = {
+                    "command": "playMusic",
+                    "type": media_type,
+                    "id": media_id,
+                }
                 return await self.glagol.send(payload)
-
+                
             _LOGGER.warning("Unsupported glagol type")
             return
 
