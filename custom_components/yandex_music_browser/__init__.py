@@ -4,30 +4,15 @@ __all__ = [
     "media_browser",
 ]
 
-import asyncio
 import datetime
 import logging
 from datetime import timedelta
-from typing import Final, Mapping, Optional, TYPE_CHECKING
+from typing import Final, Mapping
 
-import aiohttp
 import homeassistant.helpers.config_validation as cv
 import voluptuous as vol
-from homeassistant.components.media_player import (
-    BrowseError,
-    DOMAIN,
-    MediaPlayerEntity,
-    SUPPORT_BROWSE_MEDIA,
-)
-from homeassistant.components.media_player.const import (
-    MEDIA_TYPE_ALBUM,
-    MEDIA_TYPE_PLAYLIST,
-    MEDIA_TYPE_TRACK,
-    SUPPORT_PLAY_MEDIA,
-)
 from homeassistant.config_entries import ConfigEntry, SOURCE_IMPORT
 from homeassistant.const import *
-from homeassistant.core import callback
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers.typing import ConfigType, HomeAssistantType
 from homeassistant.loader import bind_hass
@@ -35,17 +20,24 @@ from homeassistant.loader import bind_hass
 from custom_components.yandex_music_browser.const import (
     CONF_CACHE_TTL,
     CONF_CLASS,
+    CONF_CREDENTIALS,
+    CONF_DEBUG,
     CONF_HEIGHT,
     CONF_IMAGE,
     CONF_ITEMS,
     CONF_LANGUAGE,
     CONF_LYRICS,
     CONF_MENU_OPTIONS,
+    CONF_PATCHES,
     CONF_SHOW_HIDDEN,
     CONF_THUMBNAIL_RESOLUTION,
     CONF_TITLE,
     CONF_WIDTH,
+    CONF_X_TOKEN,
+    DATA_AUTHENTICATORS,
     DATA_BROWSER,
+    DATA_CONFIG,
+    DATA_UNINSTALLS,
     DATA_YAML_CONFIG,
     DOMAIN,
     ROOT_MEDIA_CONTENT_TYPE,
@@ -56,7 +48,6 @@ from custom_components.yandex_music_browser.media_browser import (
     DEFAULT_MENU_OPTIONS,
     DEFAULT_THUMBNAIL_RESOLUTION,
     MAP_MEDIA_TYPE_TO_BROWSE,
-    PLAY_URL_BY_TYPES,
     YandexBrowseMedia,
     YandexMusicBrowser,
     YandexMusicBrowserAuthenticationError,
@@ -65,9 +56,6 @@ from custom_components.yandex_music_browser.media_browser import (
 )
 
 _LOGGER = logging.getLogger(__name__)
-
-if TYPE_CHECKING:
-    from custom_components.yandex_station.media_player import YandexStation
 
 
 def process_width_height_dict(resolution: dict):
@@ -157,12 +145,7 @@ THUMBNAIL_RESOLUTION_VALIDATOR = vol.All(
 LOCAL_TIMEZONE = datetime.datetime.now(datetime.timezone.utc).astimezone().tzinfo
 IS_IN_RUSSIA = timedelta(hours=2) <= LOCAL_TIMEZONE.utcoffset(None) <= timedelta(hours=12)
 
-CONF_DEBUG: Final = "debug"
-
 DEFAULT_LANGUAGE: Final = "ru" if IS_IN_RUSSIA else "en"
-
-CONF_CREDENTIALS = "credentials"
-CONF_X_TOKEN = "x_token"
 
 CONFIG_ENTRY_SCHEMA = vol.Schema(
     {
@@ -196,6 +179,9 @@ CONFIG_ENTRY_SCHEMA = vol.Schema(
                 )
             ],
         ),
+        vol.Optional(CONF_PATCHES, default=lambda: {"yandex": True, "generic": True}): vol.Schema(
+            {cv.string: cv.boolean}
+        ),
     }
 )
 
@@ -210,493 +196,6 @@ CONFIG_SCHEMA: Final = vol.Schema(
 #################################################################################
 # Authentication procedures
 #################################################################################
-
-
-async def async_get_music_token(x_token: str):
-    """Get music token using x-token. Adapted from AlexxIT/YandexStation."""
-    _LOGGER.debug("Get music token")
-
-    payload = {
-        # Thanks to https://github.com/MarshalX/yandex-music-api/
-        "client_secret": "53bc75238f0c4d08a118e51fe9203300",
-        "client_id": "23cabbbdc6cd418abb4b39c32c41195d",
-        "grant_type": "x-token",
-        "access_token": x_token,
-    }
-
-    async with aiohttp.ClientSession() as session:
-        async with session.post("https://oauth.mobile.yandex.net/1/token", data=payload) as r:
-            resp = await r.json()
-
-    assert "access_token" in resp, resp
-    return resp["access_token"]
-
-
-async def async_authenticate_using_yandex_station(entity: "YandexStation") -> str:
-    session = entity.quasar.session
-    music_token = session.music_token
-    if music_token is None:
-        x_token = session.x_token
-        if x_token is None:
-            raise ValueError("x_token is empty!")
-        music_token = await session.get_music_token(x_token)
-        session.music_token = music_token
-
-    return music_token
-
-
-async def async_authenticate_using_yandex_station_config(entity: "MediaPlayerEntity") -> str:
-    hass = entity.hass
-
-    from custom_components.yandex_station import DATA_CONFIG, DOMAIN
-
-    try:
-        yandex_station_config = hass.data[DOMAIN][DATA_CONFIG]
-    except KeyError:
-        raise YandexMusicBrowserAuthenticationError("Yandex Station configuration not found")
-
-    music_token = yandex_station_config.get("music_token")
-    if music_token is not None:
-        return music_token
-
-    x_token = yandex_station_config.get("x_token")
-    return await async_get_music_token(x_token)
-
-
-async def async_authenticate_using_config_credentials(entity: "MediaPlayerEntity") -> "Client":
-    hass = entity.hass
-    config = hass.data[DOMAIN]
-    credentials = config.get(CONF_CREDENTIALS)
-    if not credentials:
-        raise YandexMusicBrowserAuthenticationError("No credentials provided")
-
-    from yandex_music import Client
-
-    for credential in credentials:
-        if CONF_X_TOKEN in credential:
-            x_token = credential[CONF_X_TOKEN]
-
-            try:
-                token = await async_get_music_token(x_token)
-            except BaseException as e:
-                _LOGGER.debug(f'Could not get music token from "...{x_token[-6:]}": {e}')
-            else:
-                return token
-
-        else:
-            username = credential[CONF_USERNAME]
-            password = credential[CONF_PASSWORD]
-
-            try:
-                return await hass.async_add_executor_job(
-                    Client.from_credentials, username, password
-                )
-            except BaseException as e:
-                _LOGGER.debug(f'Could not get music token from "...{username[-6:]}": {e}')
-
-    raise YandexMusicBrowserAuthenticationError("No credentials found to perform authentication")
-
-
-#################################################################################
-# Base patches
-#################################################################################
-
-
-async def async_get_music_browser(entity: MediaPlayerEntity) -> YandexMusicBrowser:
-    hass = entity.hass
-    music_browser = hass.data.get(DATA_BROWSER)
-
-    if isinstance(music_browser, asyncio.Future):
-        music_browser = await music_browser
-
-    elif music_browser is None:
-        future_obj = hass.loop.create_future()
-        hass.data[DATA_BROWSER] = future_obj
-
-        try:
-            authentication = None
-            try:
-                from custom_components.yandex_station.media_player import YandexStation
-            except ImportError:
-                pass
-            else:
-                try:
-                    _LOGGER.debug("Attempting Yandex Station authentication")
-                    if isinstance(entity, YandexStation):
-                        authentication = await async_authenticate_using_yandex_station(entity)
-                    else:
-                        authentication = await async_authenticate_using_yandex_station_config(
-                            entity
-                        )
-                except BaseException as e:
-                    _LOGGER.error("Could not perform Yandex Station authentication: %s", e)
-                    pass
-
-            if authentication is None:
-                _LOGGER.debug("Attempting provided credentials authentication")
-                try:
-                    authentication = await async_authenticate_using_config_credentials(entity)
-                except BaseException as e:
-                    _LOGGER.error("Could not authenticate using any provided credentials: %s", e)
-
-            if authentication is None:
-                raise YandexMusicBrowserAuthenticationError(
-                    "could not authenticate using any method"
-                )
-
-            music_browser = await hass.async_add_executor_job(
-                YandexMusicBrowser,
-                authentication,
-                hass.data[DOMAIN],
-            )
-
-        except BaseException as e:
-            hass.data[DATA_BROWSER] = None
-            future_obj.set_exception(e)
-            raise
-        else:
-            hass.data[DATA_BROWSER] = music_browser
-            future_obj.set_result(music_browser)
-
-    return music_browser
-
-
-async def _patch_root_yandex_async_browse_media(
-    self: "MediaPlayerEntity",
-    media_content_type: Optional[str] = None,
-    media_content_id: Optional[str] = None,
-    fetch_children: bool = True,
-) -> YandexBrowseMedia:
-    music_browser = await async_get_music_browser(self)
-
-    if media_content_type is None:
-        media_content_type = ROOT_MEDIA_CONTENT_TYPE
-
-    _LOGGER.debug("Requesting browse: %s / %s" % (media_content_type, media_content_id))
-    response = await self.hass.async_add_executor_job(
-        music_browser.generate_browse_from_media,
-        (media_content_type, media_content_id),
-        fetch_children,  # fetch_children
-        True,  # cache_garbage_collection
-    )
-
-    if response is None:
-        _LOGGER.debug("Media type: %s", type(media_content_type))
-        raise BrowseError(f"Media not found: {media_content_type} / {media_content_id}")
-
-    return response
-
-
-#################################################################################
-# Patches for Yandex Station component
-#################################################################################
-
-
-def _patch_yandex_station_get_attribute(self, attr: str):
-    if attr == "supported_features":
-        supported_features = object.__getattribute__(self, attr)
-        supported_features |= SUPPORT_BROWSE_MEDIA
-
-        return supported_features
-
-    elif attr == "async_play_media":
-        return _patch_yandex_station_async_play_media.__get__(self, self.__class__)
-
-    elif attr == "async_browse_media":
-        return _patch_yandex_station_async_browse_media.__get__(self, self.__class__)
-
-    return object.__getattribute__(self, attr)
-
-
-def _update_browse_object_for_cloud(
-    music_browser: "YandexMusicBrowser",
-    browse_object: YandexBrowseMedia,
-    for_cloud: bool = True,
-) -> YandexBrowseMedia:
-    browse_object.media_content_id = browse_object.yandex_media_content_id
-    browse_object.media_content_type = browse_object.media_content_type
-
-    if for_cloud:
-        if not browse_object.can_play:
-            return browse_object
-
-        if browse_object.media_content_type == MEDIA_TYPE_PLAYLIST:
-            # We can't play playlists that are not ours
-            if (
-                ":" in browse_object.media_content_id
-                and not browse_object.media_content_type.startswith(music_browser.user_id + ":")
-            ):
-                browse_object.can_play = False
-    elif browse_object.media_content_type == MEDIA_TYPE_PLAYLIST:
-        browse_object.can_play = True
-
-    if browse_object.children:
-        for child in browse_object.children:
-            # noinspection PyTypeChecker
-            _update_browse_object_for_cloud(music_browser, child, for_cloud=for_cloud)
-
-    return browse_object
-
-
-async def _patch_yandex_station_async_play_media(
-    self: "YandexStation", media_type: str, media_id: str, **kwargs
-):
-    if media_type in MAP_MEDIA_TYPE_TO_BROWSE:
-        if self.local_state:
-            if media_type in ("track", "playlist", "album", "artist"):
-                payload = {
-                    "command": "playMusic",
-                    "type": media_type,
-                    "id": media_id,
-                }
-                return await self.glagol.send(payload)
-
-            _LOGGER.warning("Unsupported glagol type")
-            return
-
-        elif media_type == MEDIA_TYPE_ALBUM:
-            command = "альбом " + media_id
-
-        elif media_type == MEDIA_TYPE_TRACK:
-            command = "трек " + media_id
-
-        elif media_type == MEDIA_TYPE_PLAYLIST:
-            music_browser = self.hass.data.get(DATA_BROWSER)
-
-            if ":" not in media_id:
-                playlist_id = media_id
-            elif media_id.startswith(music_browser.user_id):
-                playlist_id = media_id.split(":")[-1]
-            else:
-                _LOGGER.warning(f"Unsupported playlist ID: {media_id}")
-                return
-
-            playlist_obj = await self.hass.async_add_executor_job(
-                music_browser.client.users_playlists, playlist_id
-            )
-
-            if playlist_obj is None:
-                _LOGGER.warning(f"Playlist not found: {media_id}")
-                return
-
-            command = "плейлист " + playlist_obj.title
-
-        else:
-            _LOGGER.warning(f"Unsupported cloud media type: {media_type}")
-            return
-
-        return await self.quasar.send(self.device, command)
-
-    # noinspection PyUnresolvedReferences
-    return await self.orig_async_play_media(media_type=media_type, media_id=media_id, **kwargs)
-
-
-async def _patch_yandex_station_async_browse_media(
-    self: "YandexStation",
-    media_content_type: Optional[str] = None,
-    media_content_id: Optional[str] = None,
-) -> YandexBrowseMedia:
-    music_browser = await async_get_music_browser(self)
-    response = await _patch_root_yandex_async_browse_media(
-        self, media_content_type, media_content_id
-    )
-    return _update_browse_object_for_cloud(
-        music_browser,
-        response,
-        for_cloud=not self.local_state,
-    )
-
-
-@callback
-def _async_update_yandex_entities():
-    from custom_components.yandex_station.media_player import YandexStation
-    import gc
-
-    for obj in gc.get_objects():
-        if isinstance(obj, YandexStation) and obj.hass is not None and obj.enabled and obj._added:
-            obj.async_schedule_update_ha_state(force_refresh=True)
-
-
-def _install_yandex_station():
-    try:
-        from custom_components.yandex_station.media_player import YandexStation
-    except ImportError:
-        _LOGGER.warning("Installation for Yandex Station halted")
-    else:
-        if YandexStation.__getattribute__ is not _patch_yandex_station_get_attribute:
-            _LOGGER.debug("Patching __getattribute__ for Yandex Station")
-            YandexStation.orig__getattribute__ = YandexStation.__getattribute__
-            YandexStation.__getattribute__ = _patch_yandex_station_get_attribute
-
-        _async_update_yandex_entities()
-
-
-def _uninstall_yandex_station():
-    try:
-        from custom_components.yandex_station.media_player import YandexStation
-    except ImportError:
-        pass
-    else:
-        if YandexStation.__getattribute__ is _patch_yandex_station_get_attribute:
-            # noinspection PyUnresolvedReferences
-            YandexStation.__getattribute__ = YandexStation.orig__getattribute__
-
-
-#################################################################################
-# Patches for generic component
-#################################################################################
-
-
-def _patch_generic_get_attribute(self, attr: str):
-    if attr == "supported_features":
-        supported_features = object.__getattribute__(self, attr)
-        if supported_features is not None and supported_features & SUPPORT_PLAY_MEDIA:
-            return supported_features | SUPPORT_BROWSE_MEDIA
-        return supported_features
-
-    elif attr == "async_play_media":
-        return _patch_generic_async_play_media.__get__(self, self.__class__)
-
-    elif attr == "async_browse_media":
-        return _patch_generic_async_browse_media.__get__(self, self.__class__)
-
-    return object.__getattribute__(self, attr)
-
-
-def _update_browse_object_for_url(
-    music_browser: "YandexMusicBrowser",
-    browse_object: YandexBrowseMedia,
-) -> YandexBrowseMedia:
-    browse_object.media_content_type = "yandex"
-    browse_object.media_content_id = (
-        browse_object.yandex_media_content_type + ":" + browse_object.yandex_media_content_id
-    )
-
-    if browse_object.children:
-        browse_object.children = list(
-            map(lambda x: _update_browse_object_for_url(music_browser, x), browse_object.children)
-        )
-
-    media_object = browse_object.media_object
-    browse_object.can_play = media_object and media_object.__class__ in PLAY_URL_BY_TYPES
-
-    return browse_object
-
-
-async def _patch_generic_async_play_media(
-    self: "MediaPlayerEntity",
-    media_type: Optional[str] = None,
-    media_id: Optional[str] = None,
-    **kwargs,
-):
-    _LOGGER.debug("Generic async play media call: (%s) (%s) %s", media_type, media_id, kwargs)
-    if media_type == "yandex":
-        media_type, _, media_id = media_id.partition(":")
-
-        _LOGGER.debug("Willing to play Yandex Media: %s - %s", media_type, media_id)
-        browse_object = await _patch_root_yandex_async_browse_media(self, media_type, media_id)
-        media_object = getattr(browse_object, "media_object", None)
-        if media_object:
-            media_object_type = type(media_object)
-            if media_object_type in PLAY_URL_BY_TYPES:
-                result = await self.hass.async_add_executor_job(
-                    PLAY_URL_BY_TYPES[media_object_type], media_object
-                )
-                if result:
-                    media_id, media_type = result
-                    _LOGGER.debug("Retrieved URL: %s", media_id)
-                    return await object.__getattribute__(self, "async_play_media")(
-                        media_id=media_id,
-                        media_type=media_type,
-                        **kwargs,
-                    )
-
-        raise YandexMusicBrowserException(
-            "could not play unsupported type: %s - %s" % (media_type, media_id)
-        )
-
-    return await object.__getattribute__(self, "async_play_media")(
-        media_type=media_type, media_id=media_id, **kwargs
-    )
-
-
-async def _patch_generic_async_browse_media(
-    self: "MediaPlayerEntity",
-    media_content_type: Optional[str] = None,
-    media_content_id: Optional[str] = None,
-):
-    _LOGGER.debug(
-        "Generic async browse media call: (%s) (%s)", media_content_type, media_content_id
-    )
-    yandex_browse_object = None
-    if media_content_type == "yandex":
-        media_content_type, _, media_content_id = media_content_id.partition(":")
-        yandex_browse_object = await _patch_root_yandex_async_browse_media(
-            self, media_content_type, media_content_id
-        )
-        result_object = yandex_browse_object
-
-    else:
-        async_browse_media_local = self.__class__.async_browse_media
-        result_object = None
-        if async_browse_media_local is not _patch_generic_async_browse_media:
-            try:
-                result_object = await async_browse_media_local(
-                    self, media_content_type, media_content_id
-                )
-            except NotImplementedError:
-                pass
-
-        if (
-            media_content_type is None or media_content_type == ROOT_MEDIA_CONTENT_TYPE
-        ) and not media_content_id:
-            yandex_browse_object = await _patch_root_yandex_async_browse_media(
-                self, media_content_type, media_content_id, fetch_children=not result_object
-            )
-            if result_object:
-                current_children = [*(result_object.children or [])]
-                current_children.append(yandex_browse_object)
-                result_object.children = current_children
-            else:
-                result_object = yandex_browse_object
-
-    if result_object is None:
-        raise BrowseError("Could not find required object")
-
-    if yandex_browse_object is not None:
-        await self.hass.async_add_executor_job(
-            _update_browse_object_for_url,
-            await async_get_music_browser(self),
-            yandex_browse_object,
-        )
-
-    _LOGGER.debug("Resulting object: %s", result_object)
-    _LOGGER.debug("Resulting children: %s", result_object.children)
-
-    return result_object
-
-
-def _install_generic():
-    from homeassistant.components.media_player import MediaPlayerEntity
-
-    if MediaPlayerEntity.__getattribute__ is not _patch_generic_get_attribute:
-        _LOGGER.debug(f"Patching async_browse_media for generic entities")
-        MediaPlayerEntity.orig__getattribute__ = MediaPlayerEntity.__getattribute__
-        MediaPlayerEntity.__getattribute__ = _patch_generic_get_attribute
-
-
-def _uninstall_generic():
-    from homeassistant.components.media_player import MediaPlayerEntity
-
-    if MediaPlayerEntity.__getattribute__ is _patch_generic_get_attribute:
-        # noinspection PyUnresolvedReferences
-        MediaPlayerEntity.__getattribute__ = MediaPlayerEntity.orig__getattribute__
-
-
-@property
-def _patch_supported_features(self: "MediaPlayerEntity") -> int:
-    # noinspection PyUnresolvedReferences
-    return self.orig_supported_features | SUPPORT_BROWSE_MEDIA
 
 
 async def async_setup(hass: HomeAssistantType, config: ConfigType) -> bool:
@@ -763,18 +262,54 @@ async def async_setup_entry(hass: HomeAssistantType, config_entry: ConfigEntry) 
         else:
             config = config_entry.data
 
-        try:
-            _LOGGER.debug("Performing installation for entry")
-            _install_yandex_station()
-        except ImportError:
-            _LOGGER.fatal("Yandex Station component is not available")
-            return False
+        uninstalls = {}
+        authenticators = {}
+        from importlib import import_module
 
-        _LOGGER.debug("Performing generic installation for entry")
-        _install_generic()
+        for patch, is_enabled in config.get(CONF_PATCHES, {}).items():
+            if is_enabled:
+                try:
+                    patch_module = import_module(f"custom_components.{DOMAIN}.patches.{patch}")
+                except ImportError as e:
+                    _LOGGER.error(f"Could not import patch {patch}: {e}")
+                    return False
+
+                print(patch_module)
+
+                (install, uninstall, async_authenticate) = (
+                    patch_module.install,
+                    patch_module.uninstall,
+                    getattr(patch_module, "async_authenticate", None),
+                )
+
+                uninstalls[patch] = uninstall
+
+                try:
+                    install(hass)
+
+                except BaseException as e:
+                    for patch_uninstalling, uninstall in uninstalls.items():
+                        try:
+                            uninstall()
+                        except BaseException as e:
+                            _LOGGER.error(
+                                f"Could not post-error uninstall patch {patch_uninstalling}: {e}"
+                            )
+                    return False
+
+                uninstalls[patch] = uninstall
+
+                if async_authenticate:
+                    authenticators[patch] = async_authenticate
+
+        if not uninstalls:
+            _LOGGER.warning("No patches enabled, component will shut down")
+            return False
 
         _LOGGER.debug("Installation complete")
 
+        hass.data[DATA_AUTHENTICATORS] = authenticators
+        hass.data[DATA_UNINSTALLS] = uninstalls
         hass.data[DATA_BROWSER] = None
         hass.data[DOMAIN] = CONFIG_ENTRY_SCHEMA(dict(config))
 
@@ -788,13 +323,20 @@ async def async_setup_entry(hass: HomeAssistantType, config_entry: ConfigEntry) 
 async def async_unload_entry(hass: HomeAssistantType, config_entry: ConfigEntry) -> bool:
     _LOGGER.debug(f"Begin entry unload: {config_entry.entry_id}")
 
-    try:
-        hass.data[DOMAIN] = None
-        hass.data[DATA_BROWSER] = None
+    hass.data[DOMAIN] = None
+    hass.data[DATA_BROWSER] = None
 
-        _uninstall_yandex_station()
-        _async_update_yandex_entities()
+    del hass.data[DATA_AUTHENTICATORS]
 
-        return True
-    finally:
-        _LOGGER.debug(f"End entry unload: {config_entry.entry_id}")
+    uninstalls = hass.data.pop(DATA_UNINSTALLS)
+
+    for patch_uninstalling, uninstall in uninstalls.items():
+        try:
+            _LOGGER.info(f"Uninstalling patch: {patch_uninstalling}")
+            uninstall()
+        except BaseException as e:
+            _LOGGER.error(f"Could not post-error uninstall patch {patch_uninstalling}: {e}")
+            return False
+
+    _LOGGER.debug(f"End entry unload: {config_entry.entry_id}")
+    return True

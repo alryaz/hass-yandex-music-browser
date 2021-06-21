@@ -21,6 +21,13 @@ __all__ = [
     "DEFAULT_TIMEOUT",
     "DEFAULT_REQUEST_TIMEOUT",
     "DEFAULT_TITLE_LANGUAGE",
+    "YandexMusicBrowserAuthenticationError",
+    "YandexBrowseMedia",
+    "YandexMusicBrowserBrowseError",
+    "YandexMusicBrowserException",
+    "sanitize_media_link",
+    "sanitize_thumbnail_uri",
+    "sanitize_browse_thumbnail",
 ]
 
 import functools
@@ -63,7 +70,6 @@ from yandex_music import (
     Album,
     Artist,
     Client,
-    DownloadInfo,
     Genre,
     MixLink,
     Playlist,
@@ -137,35 +143,6 @@ DEFAULT_LYRICS = False
 THUMBNAIL_EMPTY_IMAGE = "/non/exiswtent/thumbnail/generate/404"
 
 ITEM_RESPONSE_CACHE = {}
-
-
-PLAY_URL_BY_TYPES = {}
-
-
-def register_get_play_url(cls):
-    def _wrapper(fn):
-        PLAY_URL_BY_TYPES[cls] = fn
-        return fn
-
-    return _wrapper
-
-
-@register_get_play_url(Track)
-def get_track_play_url(
-    media_object: Track, codec: str = "mp3", bitrate_in_kbps: int = 192
-) -> Optional[Tuple[str, str]]:
-    download_info: Optional[List[DownloadInfo]] = media_object.download_info
-    if download_info is None:
-        download_info = media_object.get_download_info()
-
-    for info in download_info:
-        if info.codec == codec and info.bitrate_in_kbps == bitrate_in_kbps:
-            direct_link: Optional[str] = info.direct_link
-            if direct_link is None:
-                direct_link = info.get_direct_link()
-            return direct_link, "audio/mp3"
-
-    return None
 
 
 class YandexBrowseMedia(BrowseMedia):
@@ -278,6 +255,8 @@ def extract_user_data(
                 "Referer": f"https://music.yandex.ru/users/{media_content_id}/playlists",
             },
         )
+        r.encoding = "utf-8"
+        _LOGGER.debug(r.text)
         response = r.json()
         data = response["owner"]
     except BaseException as e:
@@ -454,8 +433,10 @@ class BrowseTree:
         validate: bool = True,
         collection: Optional[List] = None,
     ):
+        image = base_array.get("image")
         if collection is None:
             collection = []
+            image = image or "https://music.yandex.ru/blocks/meta/i/og-image.png"
 
         existing_items = base_array.get("items", [])
 
@@ -463,7 +444,7 @@ class BrowseTree:
         collection.append(
             {
                 "title": base_array.get("title"),
-                "image": base_array.get("image"),
+                "image": image,
                 "class": base_array.get("class"),
                 "items": new_items,
             }
@@ -1594,6 +1575,7 @@ def playlist_media_processor(
         can_expand=True,
         children_media_class=MEDIA_CLASS_TRACK,
         children=children,
+        media_object=media_object,
     )
 
 
