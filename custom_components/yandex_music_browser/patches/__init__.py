@@ -1,1 +1,1 @@
-__all__ = ("generic", "yandex")
+__all__ = ("generic", "yandex_station")

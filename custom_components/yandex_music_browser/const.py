@@ -1,6 +1,6 @@
 from typing import Final
 
-DOMAIN: str = "yandex_music_browser"
+DOMAIN: Final = "yandex_music_browser"
 CONF_CACHE_TTL: Final = "cache_ttl"
 CONF_LANGUAGE: Final = "language"
 CONF_SHOW_HIDDEN: Final = "show_hidden"
@@ -27,6 +27,7 @@ DATA_BROWSER = DOMAIN + "_browser"
 DATA_YAML_CONFIG = DOMAIN + "_yaml_config"
 DATA_AUTHENTICATORS = DOMAIN + "_authenticators"
 DATA_UNINSTALLS = DOMAIN + "_uninstalls"
+DATA_UPDATE_LISTENER: Final = DOMAIN + "_update_listener"
 CONF_CREDENTIALS = "credentials"
 CONF_X_TOKEN = "x_token"
 CONF_PATCHES = "patches"

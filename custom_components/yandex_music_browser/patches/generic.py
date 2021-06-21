@@ -16,7 +16,7 @@ from homeassistant.components.media_player import (
     SUPPORT_PLAY_MEDIA,
 )
 from homeassistant.helpers.typing import HomeAssistantType
-from yandex_music import DownloadInfo, Playlist, Track, YandexMusicObject
+from yandex_music import DownloadInfo, Track, YandexMusicObject
 
 from custom_components.yandex_music_browser.const import (
     DATA_PLAY_KEY,
@@ -103,6 +103,7 @@ async def _patch_generic_async_browse_media(
         "Generic async browse media call: (%s) (%s)", media_content_type, media_content_id
     )
     yandex_browse_object = None
+
     if media_content_type == "yandex":
         media_content_type, _, media_content_id = media_content_id.partition(":")
         yandex_browse_object = await _patch_root_async_browse_media(
@@ -118,7 +119,7 @@ async def _patch_generic_async_browse_media(
                 result_object = await async_browse_media_local(
                     self, media_content_type, media_content_id
                 )
-            except NotImplementedError:
+            except (NotImplementedError, BrowseError):
                 pass
 
         if (
@@ -347,7 +348,7 @@ def install(hass: HomeAssistantType):
     from homeassistant.components.media_player import MediaPlayerEntity
 
     if MediaPlayerEntity.__getattribute__ is not _patch_generic_get_attribute:
-        _LOGGER.debug(f"Patching async_browse_media for generic entities")
+        _LOGGER.debug(f"Patching __getattribute__ for generic entities")
         MediaPlayerEntity.orig__getattribute__ = MediaPlayerEntity.__getattribute__
         MediaPlayerEntity.__getattribute__ = _patch_generic_get_attribute
 

@@ -3,9 +3,11 @@
     "step": {
       "user": {
         "data": {
-          "debug": "Debug"
+          "debug": "Debug",
+          "yandex_station": "Yandex Station (`yandex_station`)",
+          "generic": "Generic (`media_player`)"
         },
-        "description": "This is the one and only setup step (for now)",
+        "description": "This is the one and only setup step (for now).\n\nВыберите те патчи, которые хотите использовать (или оставьте всё, как есть; загрузка произойдёт автоматически).\n\n- **auto** &mdash; попробовать загрузить патч, но не останавливать загрузку при ошибке\n- **require** &mdash; потребовать загрузки патча\n- **disable** &mdash; не загружать патч",
         "title": "Activate Yandex Music Browser"
       }
     }

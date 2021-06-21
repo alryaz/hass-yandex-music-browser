@@ -7,7 +7,7 @@ __all__ = [
 import datetime
 import logging
 from datetime import timedelta
-from typing import Final, Mapping
+from typing import Any, Final, Mapping, Optional
 
 import homeassistant.helpers.config_validation as cv
 import voluptuous as vol
@@ -38,6 +38,7 @@ from custom_components.yandex_music_browser.const import (
     DATA_BROWSER,
     DATA_CONFIG,
     DATA_UNINSTALLS,
+    DATA_UPDATE_LISTENER,
     DATA_YAML_CONFIG,
     DOMAIN,
     ROOT_MEDIA_CONTENT_TYPE,
@@ -147,6 +148,24 @@ IS_IN_RUSSIA = timedelta(hours=2) <= LOCAL_TIMEZONE.utcoffset(None) <= timedelta
 
 DEFAULT_LANGUAGE: Final = "ru" if IS_IN_RUSSIA else "en"
 
+PATCHES_SCHEMA: Optional[vol.Schema] = None
+
+
+def lazy_load_patches_schema(value: Any):
+    global PATCHES_SCHEMA
+    if PATCHES_SCHEMA is None:
+        from custom_components.yandex_music_browser.patches import __all__ as patches_list
+
+        PATCHES_SCHEMA = vol.Schema(
+            {
+                vol.Optional(patch, default=None): vol.Any(vol.Equal(None), cv.boolean)
+                for patch in patches_list
+            }
+        )
+
+    return PATCHES_SCHEMA(value)
+
+
 CONFIG_ENTRY_SCHEMA = vol.Schema(
     {
         vol.Optional(CONF_CACHE_TTL, default=600): cv.positive_float,
@@ -179,9 +198,9 @@ CONFIG_ENTRY_SCHEMA = vol.Schema(
                 )
             ],
         ),
-        vol.Optional(CONF_PATCHES, default=lambda: {"yandex": None, "generic": None}): vol.Schema(
-            {cv.string: vol.Any(vol.Equal(None), cv.boolean)}
-        ),
+        vol.Optional(
+            CONF_PATCHES, default=lambda: lazy_load_patches_schema({})
+        ): lazy_load_patches_schema,
     }
 )
 
@@ -260,18 +279,20 @@ async def async_setup_entry(hass: HomeAssistantType, config_entry: ConfigEntry) 
                 return False
             config = hass.data[DATA_YAML_CONFIG]
         else:
-            config = config_entry.data
+            config = CONFIG_ENTRY_SCHEMA(dict(config_entry.data))
 
         uninstalls = {}
         authenticators = {}
         from importlib import import_module
 
-        for patch, is_enabled in config.get(CONF_PATCHES, {}).items():
+        for patch_installing, is_enabled in config.get(CONF_PATCHES, {}).items():
             if is_enabled is True or is_enabled is None:
                 try:
-                    patch_module = import_module(f"custom_components.{DOMAIN}.patches.{patch}")
+                    patch_module = import_module(
+                        f"custom_components.{DOMAIN}.patches.{patch_installing}"
+                    )
                 except ImportError as e:
-                    _LOGGER.error(f"Could not import patch {patch}: {e}")
+                    _LOGGER.error(f"Could not import patch {patch_installing}: {e}")
                     return False
 
                 (install, uninstall, async_authenticate) = (
@@ -280,32 +301,34 @@ async def async_setup_entry(hass: HomeAssistantType, config_entry: ConfigEntry) 
                     getattr(patch_module, "async_authenticate", None),
                 )
 
-                uninstalls[patch] = uninstall
+                uninstalls[patch_installing] = uninstall
 
                 try:
+                    _LOGGER.info(f"Installing patch: {patch_installing}")
                     install(hass)
 
                 except BaseException as e:
                     if is_enabled is None:
                         try:
-                            uninstall()
+                            uninstall(hass)
                         except BaseException as e:
-                            _LOGGER.error(f"Could not post-error uninstall patch {patch}: {e}")
+                            _LOGGER.error(
+                                f"Could not post-error uninstall patch {patch_installing}: {e}"
+                            )
+                        del uninstalls[patch_installing]
                         continue
                     else:
                         for patch_uninstalling, uninstall in uninstalls.items():
                             try:
-                                uninstall()
+                                uninstall(hass)
                             except BaseException as e:
                                 _LOGGER.error(
                                     f"Could not post-error uninstall patch {patch_uninstalling}: {e}"
                                 )
                         return False
 
-                uninstalls[patch] = uninstall
-
                 if async_authenticate:
-                    authenticators[patch] = async_authenticate
+                    authenticators[patch_installing] = async_authenticate
 
         if not uninstalls:
             _LOGGER.warning("No patches enabled, component will shut down")
@@ -338,7 +361,7 @@ async def async_unload_entry(hass: HomeAssistantType, config_entry: ConfigEntry)
     for patch_uninstalling, uninstall in uninstalls.items():
         try:
             _LOGGER.info(f"Uninstalling patch: {patch_uninstalling}")
-            uninstall()
+            uninstall(hass)
         except BaseException as e:
             _LOGGER.error(f"Could not post-error uninstall patch {patch_uninstalling}: {e}")
             return False
