@@ -1,7 +1,7 @@
 {
   "domain": "yandex_music_browser",
   "name": "Yandex Music Browser",
-  "version": "v0.0.1",
+  "version": "v0.0.2",
   "documentation": "https://github.com/alryaz/hass-yandex-music-browser",
   "dependencies": [
     "yandex_station"
