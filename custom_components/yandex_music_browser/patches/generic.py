@@ -1,7 +1,9 @@
 import logging
+import random
+import string
 from functools import wraps
 from typing import Callable, Dict, List, Optional, Sequence, Tuple, Type, TypeVar, Union
-from urllib.parse import urlencode
+from urllib.parse import quote
 
 from aiohttp.abc import Request
 from aiohttp.web_exceptions import HTTPFound
@@ -14,10 +16,13 @@ from homeassistant.components.media_player import (
     SUPPORT_PLAY_MEDIA,
 )
 from homeassistant.helpers.typing import HomeAssistantType
-from m3u8_generator import PlaylistGenerator
 from yandex_music import DownloadInfo, Playlist, Track, YandexMusicObject
 
-from custom_components.yandex_music_browser.const import DOMAIN, ROOT_MEDIA_CONTENT_TYPE
+from custom_components.yandex_music_browser.const import (
+    DATA_PLAY_KEY,
+    DOMAIN,
+    ROOT_MEDIA_CONTENT_TYPE,
+)
 from custom_components.yandex_music_browser.default import async_get_music_browser
 from custom_components.yandex_music_browser.media_browser import (
     YandexBrowseMedia,
@@ -57,15 +62,12 @@ async def _patch_generic_async_play_media(
                     if internal_url is not None:
                         media_id = (
                             internal_url
-                            + YandexMusicBrowserView.url
-                            + "?"
-                            + urlencode(
-                                {
-                                    "key": "1",
-                                    "type": browse_object.yandex_media_content_type,
-                                    "id": browse_object.yandex_media_content_id,
-                                }
+                            + YandexMusicBrowserView.url.format(
+                                key=get_play_key(self.hass),
+                                media_type=quote(browse_object.yandex_media_content_type),
+                                media_id=quote(browse_object.yandex_media_content_id),
                             )
+                            + "/playlist.m3u8"
                         )
 
                 else:
@@ -196,6 +198,10 @@ def _update_browse_object_for_url(
                 can_play = True
             else:
                 can_play = bool(url_getter(hass, media_object))
+        else:
+            print("SOLVER NOT FOUND FOR", media_object.__class__)
+    else:
+        print("NO MEDIA OBJECT ON", browse_object)
 
     browse_object.can_play = can_play
 
@@ -205,59 +211,56 @@ def _update_browse_object_for_url(
 class YandexMusicBrowserView(HomeAssistantView):
     """Handle Yandex Smart Home unauthorized requests."""
 
-    url = "/api/yandex_music_browser/v1.0/playlist.m3u8"
+    url = "/api/yandex_music_browser/v1.0/{key}/{media_type}/{media_id}"
+    extra_urls = [
+        url + "/playlist.m3u8",
+        url + "/track.mp3",
+    ]
     name = "api:yandex_music_browser"
     requires_auth = False
 
-    async def get(self, request: Request) -> Response:
+    async def get(self, request: Request, key: str, media_type: str, media_id: str) -> Response:
         """Handle Yandex Smart Home HEAD requests."""
         hass: HomeAssistantType = request.app[KEY_HASS]
 
         # Bind to existence of config within HA data
-        if DOMAIN not in hass.data:
-            return Response(status=404)
+        if DOMAIN not in hass.data or DATA_PLAY_KEY not in hass.data:
+            return Response(status=404, body="no config")
 
-        # Retrieve required query parameters
-        key = request.query.get("key")
-        type_ = request.query.get("type")
-        id_ = request.query.get("id")
-
-        # Check required query parameters fullness
-        if not (key and type_ and id_):
-            return Response(status=400, body="key or media key not provided")
+        # Check playback key
+        if hass.data[DATA_PLAY_KEY] != key:
+            return Response(status=401, body="invalid key")
 
         # Get browse media object
         try:
             browse_object = await _patch_root_async_browse_media(
-                hass, type_, id_, fetch_children=False
+                hass, media_type, media_id, fetch_children=False
             )
         except BrowseError as e:
             return Response(status=404, body=str(e))
 
         media_object = browse_object.media_object
         if media_object is None:
-            return Response(status=404)
+            return Response(status=404, body="no media object")
 
         validator = URL_ITEM_VALIDATORS.get(media_object.__class__)
         if validator is None:
-            return Response(status=404)
+            return Response(status=404, body="no support")
 
         url_getter, _ = validator
 
         urls = await hass.async_add_executor_job(url_getter, hass, media_object)
         if urls is None:
-            return Response(status=404)
+            return Response(status=404, body="no urls")
 
         if isinstance(urls, str):
-            return HTTPFound(urls)
-
-        # @TODO: if media.can_play:
+            raise HTTPFound(urls)
 
         m3u8str = "#EXTM3U\n\n"
         for i, url in enumerate(urls, start=1):
-            m3u8str += f"#EXTINF: 1, Track {i}\n{url}\n"
+            m3u8str += f"#EXTINF:-1,Track {i}\n{url}\n"
 
-        return Response(status=200, body=m3u8str, content_type="application/x-mpegURL")
+        return Response(status=200, body=m3u8str, content_type="application/mpegurl")
 
 
 _TYandexMusicObject = TypeVar("_TYandexMusicObject", bound=YandexMusicObject)
@@ -273,6 +276,16 @@ def register_url_processor(cls: Type[_TYandexMusicObject], requires_test: bool =
         return fn
 
     return _wrapper
+
+
+def get_play_key(hass: HomeAssistantType):
+    play_key = hass.data.get(DATA_PLAY_KEY)
+
+    if play_key is None:
+        play_key = "".join(random.choice(string.ascii_uppercase + string.digits) for _ in range(24))
+        hass.data[DATA_PLAY_KEY] = play_key
+
+    return play_key
 
 
 def wrap_urls_container(
@@ -291,15 +304,10 @@ def wrap_urls_container(
 
         return [
             hass.config.internal_url
-            + YandexMusicBrowserView.url
-            + "?"
-            + urlencode(
-                {
-                    "key": "anything",  # @TODO: change this
-                    "type": type_,
-                    "id": id_,
-                }
+            + YandexMusicBrowserView.url.format(
+                key=get_play_key(hass), media_type=quote(type_), media_id=quote(id_)
             )
+            + "/track.mp3"
             for type_, id_ in items
         ]
 
@@ -326,17 +334,17 @@ def get_track_play_url(
     return None
 
 
-@register_url_processor(Playlist)
-@wrap_urls_container
-def get_playlist_play_url(
-    hass: HomeAssistantType,
-    media_object: Playlist,
-) -> Sequence[Tuple[str, str]]:
-    tracks = media_object.tracks
-    if tracks is None:
-        tracks = media_object.fetch_tracks()
-
-    return [("track", str(track.id)) for track in tracks]
+# @register_url_processor(Playlist)
+# @wrap_urls_container
+# def get_playlist_play_url(
+#     hass: HomeAssistantType,
+#     media_object: Playlist,
+# ) -> Sequence[Tuple[str, str]]:
+#     tracks = media_object.tracks
+#     if tracks is None:
+#         tracks = media_object.fetch_tracks()
+#
+#     return [("track", str(track.id)) for track in tracks]
 
 
 def install(hass: HomeAssistantType):
@@ -350,9 +358,11 @@ def install(hass: HomeAssistantType):
     hass.http.register_view(YandexMusicBrowserView())
 
 
-def uninstall(_: HomeAssistantType):
+def uninstall(hass: HomeAssistantType):
     from homeassistant.components.media_player import MediaPlayerEntity
 
     if MediaPlayerEntity.__getattribute__ is _patch_generic_get_attribute:
         # noinspection PyUnresolvedReferences
         MediaPlayerEntity.__getattribute__ = MediaPlayerEntity.orig__getattribute__
+
+    hass.data.pop(DATA_PLAY_KEY, None)

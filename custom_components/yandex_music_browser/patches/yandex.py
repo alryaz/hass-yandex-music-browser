@@ -63,7 +63,7 @@ def _update_browse_object_for_cloud(
     for_cloud: bool = True,
 ) -> YandexBrowseMedia:
     browse_object.media_content_id = browse_object.yandex_media_content_id
-    browse_object.media_content_type = browse_object.media_content_type
+    browse_object.media_content_type = browse_object.yandex_media_content_type
 
     if for_cloud:
         if not browse_object.can_play:
