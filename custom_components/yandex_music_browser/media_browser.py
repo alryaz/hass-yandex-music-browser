@@ -63,6 +63,7 @@ from yandex_music import (
     Album,
     Artist,
     Client,
+    DownloadInfo,
     Genre,
     MixLink,
     Playlist,
@@ -110,7 +111,7 @@ CustomResolverCallback = Callable[[re.Match], str]
 MediaContentIDType = str
 
 _MediaObjectType = TypeVar("_MediaObjectType", bound=MediaObjectType)
-BrowseGeneratorReturnType = Optional[BrowseMedia]
+BrowseGeneratorReturnType = Optional["YandexBrowseMedia"]
 BrowseGeneratorType = Callable[
     ["YandexMusicBrowser", MediaObjectReturnType, FetchChildrenType], BrowseGeneratorReturnType
 ]
@@ -138,19 +139,96 @@ THUMBNAIL_EMPTY_IMAGE = "/non/exiswtent/thumbnail/generate/404"
 ITEM_RESPONSE_CACHE = {}
 
 
-class MissingMediaInformation(BrowseError):
+PLAY_URL_BY_TYPES = {}
+
+
+def register_get_play_url(cls):
+    def _wrapper(fn):
+        PLAY_URL_BY_TYPES[cls] = fn
+        return fn
+
+    return _wrapper
+
+
+@register_get_play_url(Track)
+def get_track_play_url(
+    media_object: Track, codec: str = "mp3", bitrate_in_kbps: int = 192
+) -> Optional[Tuple[str, str]]:
+    download_info: Optional[List[DownloadInfo]] = media_object.download_info
+    if download_info is None:
+        download_info = media_object.get_download_info()
+
+    for info in download_info:
+        if info.codec == codec and info.bitrate_in_kbps == bitrate_in_kbps:
+            direct_link: Optional[str] = info.direct_link
+            if direct_link is None:
+                direct_link = info.get_direct_link()
+            return direct_link, "audio/mp3"
+
+    return None
+
+
+class YandexBrowseMedia(BrowseMedia):
+    def __init__(
+        self,
+        *,
+        media_content_id: str,
+        media_content_type: str,
+        media_object: Optional[YandexMusicObject] = None,
+        **kwargs,
+    ) -> None:
+        super().__init__(
+            media_content_id=media_content_id, media_content_type=media_content_type, **kwargs
+        )
+        self.yandex_media_content_id = media_content_id
+        self.yandex_media_content_type = media_content_type
+        self.media_object = media_object
+
+    def __repr__(self):
+        return (
+            self.__class__.__name__
+            + "["
+            + str(self.yandex_media_content_type)
+            + ":"
+            + str(self.yandex_media_content_id)
+            + "]{"
+            + str(self.media_content_type)
+            + ":"
+            + str(self.media_content_id)
+            + "}("
+            + str(type(self.media_object).__name__)
+            + ")"
+        )
+
+    def __str__(self):
+        return repr(self)
+
+
+class YandexMusicBrowserException(Exception):
+    pass
+
+
+class YandexMusicBrowserAuthenticationError(YandexMusicBrowserException):
+    pass
+
+
+class YandexMusicBrowserBrowseError(BrowseError, YandexMusicBrowserException):
+    pass
+
+
+class MissingMediaInformation(YandexMusicBrowserBrowseError):
     """Missing media required information."""
 
 
-class UnknownMediaType(BrowseError):
+class UnknownMediaType(YandexMusicBrowserBrowseError):
     """Unknown media type."""
 
 
-class TimeoutDataFetching(BrowseError):
+class TimeoutDataFetching(YandexMusicBrowserBrowseError):
     """Timed out while fetching data"""
 
 
-class InvalidUserMediaID(BrowseError):
+class InvalidUserMediaID(YandexMusicBrowserBrowseError):
     """Raised when media_content_id contains invalid user_id"""
 
 
@@ -258,7 +336,7 @@ def sanitize_thumbnail_uri(
 
 
 def sanitize_browse_thumbnail(
-    browse_object: BrowseMedia,
+    browse_object: YandexBrowseMedia,
     default_thumbnail: Optional[str] = None,
     preferred_resolution: PreferredResolutionType = None,
 ) -> None:
@@ -966,7 +1044,7 @@ def adapt_directory_to_browse_processor(
 
             title = browser.get_translation(_translation_key, "title")
 
-            return BrowseMedia(
+            return YandexBrowseMedia(
                 media_class=MEDIA_CLASS_DIRECTORY,
                 media_content_id=media_content_id,
                 media_content_type="",
@@ -1092,7 +1170,7 @@ def user_processor(
     else:
         children = None
 
-    return BrowseMedia(
+    return YandexBrowseMedia(
         title=title,
         media_class=MEDIA_CLASS_DIRECTORY,
         media_content_type="user",
@@ -1144,7 +1222,7 @@ def library_processor(
     if title is None:
         title = browser.get_translation(ROOT_MEDIA_CONTENT_TYPE, "folder")
 
-    return BrowseMedia(
+    return YandexBrowseMedia(
         media_class=MEDIA_CLASS_DIRECTORY,
         media_content_type=ROOT_MEDIA_CONTENT_TYPE,
         media_content_id=str(media_id),
@@ -1197,7 +1275,7 @@ def generate_radio_object(
     thumbnail = sanitize_thumbnail_uri(thumbnail, browser.thumbnail_resolution)
     prefix = browser.get_translation(MEDIA_TYPE_RADIO, "prefix")
 
-    return BrowseMedia(
+    return YandexBrowseMedia(
         title=f"{prefix}: {suffix}",
         thumbnail=thumbnail,
         media_class=MEDIA_CLASS_TRACK,
@@ -1208,7 +1286,7 @@ def generate_radio_object(
     )
 
 
-@register_type_browse_processor(media_id_pattern=False)
+@register_type_browse_processor()
 @adapt_directory_to_browse_processor(children_media_class=MEDIA_CLASS_PLAYLIST)
 def personal_mixes_processor(
     browser: "YandexMusicBrowser", media_id: str
@@ -1290,7 +1368,7 @@ def user_liked_tracks_processor(
         return track_list.fetch_tracks()
 
 
-@register_type_browse_processor(media_id_pattern=False)
+@register_type_browse_processor()
 @adapt_directory_to_browse_processor(children_media_class=MEDIA_CLASS_GENRE)
 def genres_processor(browser: "YandexMusicBrowser", media_id: str):
     items = browser.client.genres(timeout=browser.timeout)
@@ -1306,7 +1384,7 @@ def genres_processor(browser: "YandexMusicBrowser", media_id: str):
     return items
 
 
-@register_type_browse_processor(media_id_pattern=False)
+@register_type_browse_processor()
 @adapt_directory_to_browse_processor(children_media_class=MEDIA_CLASS_ALBUM)
 def new_releases_processor(browser: "YandexMusicBrowser", media_id: str) -> Optional[List[Album]]:
     landing_list = browser.client.new_releases(timeout=browser.timeout)
@@ -1316,7 +1394,7 @@ def new_releases_processor(browser: "YandexMusicBrowser", media_id: str) -> Opti
             return browser.client.albums(album_ids=album_ids, timeout=browser.timeout)
 
 
-@register_type_browse_processor(media_id_pattern=False)
+@register_type_browse_processor()
 @adapt_directory_to_browse_processor(children_media_class=MEDIA_CLASS_PLAYLIST)
 def new_playlists_processor(
     browser: "YandexMusicBrowser", media_id: str
@@ -1329,7 +1407,7 @@ def new_playlists_processor(
             return browser.get_playlists_from_ids(playlist_ids)
 
 
-@register_type_browse_processor(media_id_pattern=False)
+@register_type_browse_processor()
 @adapt_directory_to_browse_processor(children_media_class=MEDIA_CLASS_PLAYLIST)
 def yandex_mixes_processor(
     browser: "YandexMusicBrowser", media_id: str
@@ -1391,7 +1469,7 @@ def track_media_processor(
                 if lyrics and lyrics.full_lyrics:
                     for i, line in enumerate(lyrics.full_lyrics.splitlines()):
                         children.append(
-                            BrowseMedia(
+                            YandexBrowseMedia(
                                 title=line,
                                 media_content_id=str(media_object.id) + "_line_" + str(i),
                                 media_content_type="lyrics_line",
@@ -1404,7 +1482,7 @@ def track_media_processor(
     else:
         children = None
 
-    return BrowseMedia(
+    return YandexBrowseMedia(
         title=track_title,
         media_content_type=MEDIA_TYPE_TRACK,
         media_class=MEDIA_CLASS_TRACK,
@@ -1413,6 +1491,7 @@ def track_media_processor(
         can_play=True,
         can_expand=show_lyrics,
         children=children,
+        media_object=media_object,
     )
 
 
@@ -1428,7 +1507,7 @@ def track_short_media_processor(
 @adapt_media_browse_processor(Album)
 def album_media_processor(
     browser: "YandexMusicBrowser", media_object: Album, fetch_children: FetchChildrenType
-) -> BrowseMedia:
+) -> YandexBrowseMedia:
     if fetch_children:
         fetch_children = int(fetch_children) - 1
 
@@ -1445,7 +1524,7 @@ def album_media_processor(
     else:
         children = None
 
-    return BrowseMedia(
+    return YandexBrowseMedia(
         title=media_object.title,
         media_content_type=MEDIA_TYPE_ALBUM,
         media_class=MEDIA_CLASS_ALBUM,
@@ -1460,7 +1539,7 @@ def album_media_processor(
 @adapt_media_browse_processor(Artist)
 def artist_media_processor(
     browser: "YandexMusicBrowser", media_object: Artist, fetch_children: FetchChildrenType
-) -> BrowseMedia:
+) -> YandexBrowseMedia:
     if fetch_children:
         fetch_children = int(fetch_children) - 1
         artist_albums = media_object.get_albums(timeout=browser.timeout)
@@ -1475,7 +1554,7 @@ def artist_media_processor(
     else:
         children = None
 
-    return BrowseMedia(
+    return YandexBrowseMedia(
         title=media_object.name,
         media_content_type=MEDIA_TYPE_ARTIST,
         media_class=MEDIA_CLASS_ARTIST,
@@ -1491,7 +1570,7 @@ def artist_media_processor(
 @adapt_media_browse_processor(Playlist)
 def playlist_media_processor(
     browser: "YandexMusicBrowser", media_object: Playlist, fetch_children: FetchChildrenType
-) -> BrowseMedia:
+) -> YandexBrowseMedia:
     if fetch_children:
         fetch_children = int(fetch_children) - 1
         playlist_tracks = media_object.fetch_tracks(timeout=browser.timeout)
@@ -1502,7 +1581,7 @@ def playlist_media_processor(
     else:
         children = None
 
-    return BrowseMedia(
+    return YandexBrowseMedia(
         title=media_object.title,
         media_content_type=MEDIA_TYPE_PLAYLIST,
         media_class=MEDIA_CLASS_PLAYLIST,
@@ -1518,7 +1597,7 @@ def playlist_media_processor(
 @adapt_media_browse_processor(MixLink)
 def mix_link_media_processor(
     browser: "YandexMusicBrowser", media_object: MixLink, fetch_children: FetchChildrenType
-) -> Optional[BrowseMedia]:
+) -> Optional[YandexBrowseMedia]:
     if not media_object.url.startswith("/tag/"):
         # @TODO: support other MixLink types
         return None
@@ -1542,7 +1621,7 @@ def mix_link_media_processor(
     else:
         children = None
 
-    return BrowseMedia(
+    return YandexBrowseMedia(
         title=media_object.title,
         media_content_type=MEDIA_TYPE_MIX_TAG,
         media_class=MEDIA_CLASS_DIRECTORY,
@@ -1573,7 +1652,7 @@ def tag_result_media_processor(
     else:
         children = None
 
-    return BrowseMedia(
+    return YandexBrowseMedia(
         title=tag.name,
         media_content_type=MEDIA_TYPE_MIX_TAG,
         media_class=MEDIA_CLASS_DIRECTORY,
@@ -1635,7 +1714,7 @@ def genre_media_processor(
     else:
         children = None
 
-    return BrowseMedia(
+    return YandexBrowseMedia(
         title=media_object.title,
         media_content_type=MEDIA_TYPE_GENRE,
         media_content_id=media_object.id,
