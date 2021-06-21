@@ -198,10 +198,6 @@ def _update_browse_object_for_url(
                 can_play = True
             else:
                 can_play = bool(url_getter(hass, media_object))
-        else:
-            print("SOLVER NOT FOUND FOR", media_object.__class__)
-    else:
-        print("NO MEDIA OBJECT ON", browse_object)
 
     browse_object.can_play = can_play
 

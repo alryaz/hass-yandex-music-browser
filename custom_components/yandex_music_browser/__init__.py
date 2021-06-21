@@ -179,8 +179,8 @@ CONFIG_ENTRY_SCHEMA = vol.Schema(
                 )
             ],
         ),
-        vol.Optional(CONF_PATCHES, default=lambda: {"yandex": True, "generic": True}): vol.Schema(
-            {cv.string: cv.boolean}
+        vol.Optional(CONF_PATCHES, default=lambda: {"yandex": None, "generic": None}): vol.Schema(
+            {cv.string: vol.Any(vol.Equal(None), cv.boolean)}
         ),
     }
 )
@@ -267,14 +267,12 @@ async def async_setup_entry(hass: HomeAssistantType, config_entry: ConfigEntry) 
         from importlib import import_module
 
         for patch, is_enabled in config.get(CONF_PATCHES, {}).items():
-            if is_enabled:
+            if is_enabled is True or is_enabled is None:
                 try:
                     patch_module = import_module(f"custom_components.{DOMAIN}.patches.{patch}")
                 except ImportError as e:
                     _LOGGER.error(f"Could not import patch {patch}: {e}")
                     return False
-
-                print(patch_module)
 
                 (install, uninstall, async_authenticate) = (
                     patch_module.install,
@@ -288,14 +286,21 @@ async def async_setup_entry(hass: HomeAssistantType, config_entry: ConfigEntry) 
                     install(hass)
 
                 except BaseException as e:
-                    for patch_uninstalling, uninstall in uninstalls.items():
+                    if is_enabled is None:
                         try:
                             uninstall()
                         except BaseException as e:
-                            _LOGGER.error(
-                                f"Could not post-error uninstall patch {patch_uninstalling}: {e}"
-                            )
-                    return False
+                            _LOGGER.error(f"Could not post-error uninstall patch {patch}: {e}")
+                        continue
+                    else:
+                        for patch_uninstalling, uninstall in uninstalls.items():
+                            try:
+                                uninstall()
+                            except BaseException as e:
+                                _LOGGER.error(
+                                    f"Could not post-error uninstall patch {patch_uninstalling}: {e}"
+                                )
+                        return False
 
                 uninstalls[patch] = uninstall
 

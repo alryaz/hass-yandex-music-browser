@@ -10,7 +10,7 @@ from homeassistant.components.media_player.const import (
 from homeassistant.core import callback
 from homeassistant.helpers.typing import HomeAssistantType
 
-from custom_components.yandex_music_browser.const import DATA_BROWSER
+from custom_components.yandex_music_browser.const import DATA_BROWSER, MEDIA_TYPE_RADIO
 from custom_components.yandex_music_browser.default import (
     async_get_music_browser,
     async_get_music_token,
@@ -92,7 +92,7 @@ async def _patch_yandex_station_async_play_media(
 ):
     if media_type in MAP_MEDIA_TYPE_TO_BROWSE:
         if self.local_state:
-            if media_type in ("track", "playlist", "album", "artist"):
+            if media_type in ("track", "playlist", "album", "artist", "radio"):
                 payload = {
                     "command": "playMusic",
                     "type": media_type,
@@ -100,14 +100,14 @@ async def _patch_yandex_station_async_play_media(
                 }
                 return await self.glagol.send(payload)
 
-            _LOGGER.warning("Unsupported glagol type")
-            return
-
-        elif media_type == MEDIA_TYPE_ALBUM:
+        if media_type == MEDIA_TYPE_ALBUM:
             command = "альбом " + media_id
 
         elif media_type == MEDIA_TYPE_TRACK:
             command = "трек " + media_id
+
+        elif media_type == MEDIA_TYPE_RADIO:
+            command = "радио " + media_id
 
         elif media_type == MEDIA_TYPE_PLAYLIST:
             music_browser = self.hass.data.get(DATA_BROWSER)

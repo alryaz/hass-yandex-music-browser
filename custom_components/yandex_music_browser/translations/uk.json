@@ -50,6 +50,9 @@
     },
     "user": {
       "title": "Користувач: {user_id}"
+    },
+    "radio": {
+      "title": "Радио: {title}"
     }
   }
 }

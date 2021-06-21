@@ -1257,10 +1257,9 @@ def generate_radio_object(
         return None
 
     thumbnail = sanitize_thumbnail_uri(thumbnail, browser.thumbnail_resolution)
-    prefix = browser.get_translation(MEDIA_TYPE_RADIO, "prefix")
 
     return YandexBrowseMedia(
-        title=f"{prefix}: {suffix}",
+        title=browser.get_translation(MEDIA_TYPE_RADIO, "prefix", title=suffix),
         thumbnail=thumbnail,
         media_class=MEDIA_CLASS_TRACK,
         media_content_id=radio_content_id,
