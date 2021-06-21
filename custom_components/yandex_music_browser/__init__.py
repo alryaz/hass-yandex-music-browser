@@ -8,7 +8,7 @@ import asyncio
 import datetime
 import logging
 from datetime import timedelta
-from typing import Final, Mapping, Optional, TYPE_CHECKING, Type
+from typing import Any, Final, Mapping, MutableMapping, Optional, TYPE_CHECKING, Type
 
 import homeassistant.helpers.config_validation as cv
 import voluptuous as vol
@@ -29,7 +29,6 @@ from homeassistant.core import callback
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers.typing import ConfigType, HomeAssistantType
 from homeassistant.loader import bind_hass
-import homeassistant.util.dt as dt_util
 
 from custom_components.yandex_music_browser.const import (
     CONF_CACHE_TTL,
@@ -51,8 +50,12 @@ from custom_components.yandex_music_browser.const import (
     SUPPORTED_BROWSER_LANGUAGES,
 )
 from custom_components.yandex_music_browser.media_browser import (
+    BrowseTree,
+    DEFAULT_MENU_OPTIONS,
+    DEFAULT_THUMBNAIL_RESOLUTION,
     MAP_MEDIA_TYPE_TO_BROWSE,
     YandexMusicBrowser,
+    sanitize_media_link,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -97,31 +100,41 @@ def process_width_height_str(resolution: str):
     return {CONF_WIDTH: width, CONF_HEIGHT: height}
 
 
-def process_menu_options(menu_options: Mapping):
+def validate_parsed_menu_options(menu_options: Mapping):
     from custom_components.yandex_music_browser.media_browser import BrowseTree
 
     try:
         BrowseTree.from_map(menu_options, validate=True)
     except (ValueError, IndexError, TypeError) as e:
-        raise vol.Invalid("invalid menu options: %s", str(e))
+        raise vol.Invalid("invalid menu options: %s" % str(e))
+
     return menu_options
 
 
+def wrap_sanitize_media_link(x):
+    try:
+        return sanitize_media_link(x)
+    except BaseException as e:
+        raise vol.Invalid("media type error: %s" % e)
+
+
 MENU_OPTIONS_VALIDATOR = vol.All(
-    lambda x: {CONF_ITEMS: x} if isinstance(x, list) else x,  # convert root-type lists to maps
+    lambda x: {CONF_ITEMS: x} if isinstance(x, list) else x,
     vol.Schema(
         {
-            vol.Optional(CONF_TITLE): cv.string,
-            vol.Optional(CONF_IMAGE): cv.string,
-            vol.Optional(CONF_CLASS): cv.string,
+            vol.Optional(CONF_TITLE, default=None): vol.Any(vol.Equal(None), cv.string),
+            vol.Optional(CONF_IMAGE, default=None): vol.Any(vol.Equal(None), cv.string),
+            vol.Optional(CONF_CLASS, default=None): vol.Any(vol.Equal(None), cv.string),
+            vol.Optional(CONF_ITEMS, default=[]): [
+                vol.Any(
+                    wrap_sanitize_media_link,
+                    lambda x: MENU_OPTIONS_VALIDATOR(x),
+                )
+            ],
         }
     ),
 )
 
-# patch-in recursive validation
-MENU_OPTIONS_VALIDATOR.validators[1].schema[vol.Required(CONF_ITEMS)] = vol.All(
-    cv.ensure_list, [vol.Any(cv.string, MENU_OPTIONS_VALIDATOR)], vol.Length(min=1)
-)
 
 THUMBNAIL_RESOLUTION_VALIDATOR = vol.All(
     vol.Any(
@@ -138,26 +151,31 @@ THUMBNAIL_RESOLUTION_VALIDATOR = vol.All(
 LOCAL_TIMEZONE = datetime.datetime.now(datetime.timezone.utc).astimezone().tzinfo
 IS_IN_RUSSIA = timedelta(hours=2) <= LOCAL_TIMEZONE.utcoffset(None) <= timedelta(hours=12)
 
+CONF_DEBUG: Final = "debug"
+
 DEFAULT_LANGUAGE: Final = "ru" if IS_IN_RUSSIA else "en"
+
+
+CONFIG_ENTRY_SCHEMA = vol.Schema(
+    {
+        vol.Optional(CONF_CACHE_TTL, default=600): cv.positive_float,
+        vol.Optional(CONF_TIMEOUT, default=15): cv.positive_float,
+        vol.Optional(CONF_LANGUAGE, default=DEFAULT_LANGUAGE): vol.All(
+            vol.Lower, vol.In(SUPPORTED_BROWSER_LANGUAGES)
+        ),
+        vol.Optional(CONF_SHOW_HIDDEN, default=False): cv.boolean,
+        vol.Optional(CONF_LYRICS, default=False): cv.boolean,
+        vol.Optional(CONF_MENU_OPTIONS, default=lambda: DEFAULT_MENU_OPTIONS.to_map()): vol.All(
+            MENU_OPTIONS_VALIDATOR, validate_parsed_menu_options
+        ),
+        vol.Optional(CONF_THUMBNAIL_RESOLUTION): THUMBNAIL_RESOLUTION_VALIDATOR,
+        vol.Optional(CONF_DEBUG, default=False): cv.boolean,
+    }
+)
 
 CONFIG_SCHEMA: Final = vol.Schema(
     {
-        vol.Optional(DOMAIN): vol.Schema(
-            {
-                vol.Optional(CONF_CACHE_TTL, default=600): cv.positive_float,
-                vol.Optional(CONF_TIMEOUT): cv.positive_float,
-                vol.Optional(CONF_LANGUAGE, default=DEFAULT_LANGUAGE): vol.In(
-                    SUPPORTED_BROWSER_LANGUAGES,
-                ),
-                vol.Optional(CONF_SHOW_HIDDEN, default=False): cv.boolean,
-                vol.Optional(CONF_LYRICS, default=False): cv.boolean,
-                vol.Optional(CONF_MENU_OPTIONS): vol.All(
-                    MENU_OPTIONS_VALIDATOR,
-                    process_menu_options,
-                ),
-                vol.Optional(CONF_THUMBNAIL_RESOLUTION): THUMBNAIL_RESOLUTION_VALIDATOR,
-            }
-        ),
+        vol.Optional(DOMAIN): CONFIG_ENTRY_SCHEMA,
     },
     extra=vol.ALLOW_EXTRA,
 )
@@ -188,6 +206,7 @@ async def async_setup(hass: HomeAssistantType, config: ConfigType) -> bool:
 
     except StopIteration:
         _LOGGER.debug("Creating new import configuration")
+        hass.data[DATA_YAML_CONFIG] = domain_config
         hass.async_create_task(
             hass.config_entries.flow.async_init(
                 DOMAIN,
@@ -246,7 +265,7 @@ async def async_setup_entry(hass: HomeAssistantType, config_entry: ConfigEntry) 
         _LOGGER.debug("Installation complete")
 
         hass.data[DATA_BROWSER] = None
-        hass.data[DOMAIN] = config
+        hass.data[DOMAIN] = CONFIG_ENTRY_SCHEMA(dict(config))
 
         return True
 
@@ -280,7 +299,7 @@ async def _patch_async_play_media(self: "YandexStation", media_type: str, media_
                     "id": media_id,
                 }
                 return await self.glagol.send(payload)
-                
+
             _LOGGER.warning("Unsupported glagol type")
             return
 

@@ -58,6 +58,9 @@
     },
     "new_playlists": {
       "title": "Новые плейлисты"
+    },
+    "user": {
+      "title": "Пользователь: {user_id}"
     }
   }
 }

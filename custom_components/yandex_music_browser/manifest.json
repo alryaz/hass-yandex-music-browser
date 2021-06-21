@@ -2,11 +2,11 @@
   "domain": "yandex_music_browser",
   "name": "Yandex Music Browser",
   "version": "v0.0.1",
-  "documentation": "https://github.com/alryaz/hass-mosoblgaz",
+  "documentation": "https://github.com/alryaz/hass-yandex-music-browser",
   "dependencies": [
     "yandex_station"
   ],
-  "issue_tracker": "https://github.com/alryaz/hass-mosoblgaz/issues",
+  "issue_tracker": "https://github.com/alryaz/hass-yandex-music-browser/issues",
   "codeowners": [
     "@alryaz"
   ],

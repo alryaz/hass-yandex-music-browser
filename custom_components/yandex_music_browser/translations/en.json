@@ -58,6 +58,9 @@
     },
     "new_playlists": {
       "title": "New playlists"
+    },
+    "user": {
+      "title": "User: {user_id}"
     }
   }
 }
