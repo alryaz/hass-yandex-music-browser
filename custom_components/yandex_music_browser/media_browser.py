@@ -940,8 +940,11 @@ def register_type_browse_processor(
 
             browse_object = func(browser, media_content_id, fetch_children)
 
-            if force_media_content_type and isinstance(browse_object, BrowseMedia):
-                browse_object.media_content_type = _media_content_type
+            if force_media_content_type:
+                if isinstance(browse_object, BrowseMedia):
+                    browse_object.media_content_type = _media_content_type
+                if isinstance(browse_object, YandexBrowseMedia):
+                    browse_object.yandex_media_content_type = _media_content_type
 
             if cache_key is not None:
                 browser.response_cache[cache_key] = (time(), browse_object)
