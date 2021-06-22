@@ -134,8 +134,9 @@ async def _patch_yandex_station_async_play_media(
 
         return await self.quasar.send(self.device, command)
 
-    # noinspection PyUnresolvedReferences
-    return await self.orig_async_play_media(media_type=media_type, media_id=media_id, **kwargs)
+    return await object.__getattribute__(self, "async_play_media")(
+        media_type=media_type, media_id=media_id, **kwargs
+    )
 
 
 async def _patch_yandex_station_async_browse_media(

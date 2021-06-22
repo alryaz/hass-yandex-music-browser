@@ -4,6 +4,7 @@
   "version": "v0.0.5",
   "documentation": "https://github.com/alryaz/hass-yandex-music-browser",
   "dependencies": [
+    "http",
     "media_source"
   ],
   "issue_tracker": "https://github.com/alryaz/hass-yandex-music-browser/issues",

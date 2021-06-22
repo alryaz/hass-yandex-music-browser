@@ -15,8 +15,9 @@ from homeassistant.components.media_player import (
     SUPPORT_BROWSE_MEDIA,
     SUPPORT_PLAY_MEDIA,
 )
+from homeassistant.components.media_player.const import MEDIA_TYPE_MUSIC, MEDIA_TYPE_PLAYLIST
 from homeassistant.helpers.typing import HomeAssistantType
-from yandex_music import DownloadInfo, Track, YandexMusicObject
+from yandex_music import Artist, DownloadInfo, Playlist, Track, YandexMusicObject
 
 from custom_components.yandex_music_browser.const import (
     DATA_PLAY_KEY,
@@ -56,7 +57,7 @@ async def _patch_generic_async_play_media(
                 # Retrieve URL parser
                 getter, _ = URL_ITEM_VALIDATORS[media_object_type]
                 media_id = None
-
+                media_type = MEDIA_TYPE_MUSIC
                 if getattr(getter, "_is_urls_container", False):
                     internal_url = self.hass.config.internal_url
                     if internal_url is not None:
@@ -69,6 +70,7 @@ async def _patch_generic_async_play_media(
                             )
                             + "/playlist.m3u8"
                         )
+                        media_type = MEDIA_TYPE_PLAYLIST
 
                 else:
                     # Allow playback only if no test is provided, or preliminary test succeeds
@@ -81,7 +83,7 @@ async def _patch_generic_async_play_media(
                     _LOGGER.debug("Retrieved URL: %s", media_id)
                     return await object.__getattribute__(self, "async_play_media")(
                         media_id=media_id,
-                        media_type="audio",
+                        media_type=media_type,
                         **kwargs,
                     )
 
@@ -141,9 +143,10 @@ async def _patch_generic_async_browse_media(
                     result_object.media_content_id,
                     result_object.media_content_type,
                 )
-                current_children = [*(result_object.children or [])]
-                current_children.append(yandex_browse_object)
-                result_object.children = current_children
+                result_object.children = [
+                    *(result_object.children or []),
+                    yandex_browse_object,
+                ]
             else:
                 result_object = yandex_browse_object
 
@@ -276,6 +279,12 @@ _TYandexMusicObject = TypeVar("_TYandexMusicObject", bound=YandexMusicObject)
 TURLGetter = Callable[[HomeAssistantType, _TYandexMusicObject], Optional[Union[str, Sequence[str]]]]
 
 
+GET_MEDIA_OBJECT_NAME = {
+    Playlist: lambda x: x.title,
+    Track: lambda x: f"{x.art} - {x.title}",
+    Artist: lambda x: x.name,
+}
+
 URL_ITEM_VALIDATORS: Dict[Type[YandexMusicObject], Tuple[TURLGetter, bool]] = {}
 
 
@@ -343,17 +352,16 @@ def get_track_play_url(
     return None
 
 
-# @register_url_processor(Playlist)
-# @wrap_urls_container
-# def get_playlist_play_url(
-#     hass: HomeAssistantType,
-#     media_object: Playlist,
-# ) -> Sequence[Tuple[str, str]]:
-#     tracks = media_object.tracks
-#     if tracks is None:
-#         tracks = media_object.fetch_tracks()
-#
-#     return [("track", str(track.id)) for track in tracks]
+@register_url_processor(Playlist)
+@wrap_urls_container
+def get_playlist_play_url(
+    hass: HomeAssistantType,
+    media_object: Playlist,
+) -> Sequence[Tuple[str, str]]:
+    tracks = media_object.tracks
+    if tracks is None:
+        tracks = media_object.fetch_tracks()
+    return [("track", str(track.id)) for track in tracks]
 
 
 def install(hass: HomeAssistantType):
