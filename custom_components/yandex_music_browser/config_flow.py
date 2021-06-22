@@ -4,8 +4,7 @@ import homeassistant.helpers.config_validation as cv
 import voluptuous as vol
 from homeassistant.config_entries import CONN_CLASS_CLOUD_POLL, ConfigFlow
 
-from custom_components.yandex_music_browser.const import CONF_PATCHES, DOMAIN
-from custom_components.yandex_station import CONF_DEBUG
+from custom_components.yandex_music_browser.const import CONF_PATCHES, DOMAIN, CONF_DEBUG
 
 PATCH_STATE_VALUES = {
     None: "auto",
