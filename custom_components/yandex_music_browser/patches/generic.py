@@ -122,13 +122,25 @@ async def _patch_generic_async_browse_media(
             except (NotImplementedError, BrowseError):
                 pass
 
+        _root_browse_object_access = getattr(self, "_root_browse_object_access", None)
+
         if (
-            media_content_type is None or media_content_type == ROOT_MEDIA_CONTENT_TYPE
-        ) and not media_content_id:
+            (media_content_type is None or media_content_type == ROOT_MEDIA_CONTENT_TYPE)
+            and not media_content_id
+        ) or (
+            result_object
+            and _root_browse_object_access
+            and (result_object.media_content_id, result_object.media_content_type)
+            == _root_browse_object_access
+        ):
             yandex_browse_object = await _patch_root_async_browse_media(
                 self, media_content_type, media_content_id, fetch_children=not result_object
             )
             if result_object:
+                self._root_browse_object_access = (
+                    result_object.media_content_id,
+                    result_object.media_content_type,
+                )
                 current_children = [*(result_object.children or [])]
                 current_children.append(yandex_browse_object)
                 result_object.children = current_children
