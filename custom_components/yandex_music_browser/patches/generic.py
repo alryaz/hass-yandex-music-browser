@@ -134,7 +134,7 @@ async def _patch_generic_async_browse_media(
             == _root_browse_object_access
         ):
             yandex_browse_object = await _patch_root_async_browse_media(
-                self, media_content_type, media_content_id, fetch_children=not result_object
+                self, None, None, fetch_children=not result_object
             )
             if result_object:
                 self._root_browse_object_access = (
