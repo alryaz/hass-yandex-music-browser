@@ -66,16 +66,14 @@ def _update_browse_object_for_cloud(
     browse_object.media_content_type = browse_object.yandex_media_content_type
 
     if for_cloud:
-        if not browse_object.can_play:
-            return browse_object
-
-        if browse_object.media_content_type == MEDIA_TYPE_PLAYLIST:
-            # We can't play playlists that are not ours
-            if (
-                ":" in browse_object.media_content_id
-                and not browse_object.media_content_type.startswith(music_browser.user_id + ":")
-            ):
-                browse_object.can_play = False
+        if browse_object.can_play:
+            if browse_object.media_content_type == MEDIA_TYPE_PLAYLIST:
+                # We can't play playlists that are not ours
+                if (
+                    ":" in browse_object.media_content_id
+                    and not browse_object.media_content_type.startswith(music_browser.user_id + ":")
+                ):
+                    browse_object.can_play = False
     elif browse_object.media_content_type == MEDIA_TYPE_PLAYLIST:
         browse_object.can_play = True
 
