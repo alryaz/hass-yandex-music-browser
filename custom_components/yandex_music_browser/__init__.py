@@ -283,6 +283,7 @@ async def async_setup_entry(hass: HomeAssistantType, config_entry: ConfigEntry) 
 
         uninstalls = {}
         authenticators = {}
+        
         from importlib import import_module
 
         for patch_installing, is_enabled in config.get(CONF_PATCHES, {}).items():
@@ -336,14 +337,12 @@ async def async_setup_entry(hass: HomeAssistantType, config_entry: ConfigEntry) 
 
         _LOGGER.debug("Installation complete")
         
-        complete_config = CONFIG_ENTRY_SCHEMA(dict(config))
-        
-        _LOGGER.debug(f"Final configuration: {complete_config}")
+        _LOGGER.debug(f"Final configuration: {config}")
 
         hass.data[DATA_AUTHENTICATORS] = authenticators
         hass.data[DATA_UNINSTALLS] = uninstalls
         hass.data[DATA_BROWSER] = None
-        hass.data[DOMAIN] = complete_config
+        hass.data[DOMAIN] = config
 
         return True
 
