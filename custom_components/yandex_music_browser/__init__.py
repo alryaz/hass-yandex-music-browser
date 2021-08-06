@@ -335,11 +335,15 @@ async def async_setup_entry(hass: HomeAssistantType, config_entry: ConfigEntry) 
             return False
 
         _LOGGER.debug("Installation complete")
+        
+        complete_config = CONFIG_ENTRY_SCHEMA(dict(config))
+        
+        _LOGGER.debug(f"Final configuration: {complete_config}")
 
         hass.data[DATA_AUTHENTICATORS] = authenticators
         hass.data[DATA_UNINSTALLS] = uninstalls
         hass.data[DATA_BROWSER] = None
-        hass.data[DOMAIN] = CONFIG_ENTRY_SCHEMA(dict(config))
+        hass.data[DOMAIN] = complete_config
 
         return True
 
