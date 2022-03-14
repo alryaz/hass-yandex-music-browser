@@ -13,7 +13,7 @@
   ],
   "config_flow": true,
   "requirements": [
-    "yandex-music==1.0.0"
+    "yandex-music"
   ],
   "iot_class": "cloud_polling"
 }
