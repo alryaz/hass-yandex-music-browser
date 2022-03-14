@@ -578,9 +578,7 @@ class YandexMusicBrowser:
         if isinstance(authentication, Client):
             client = authentication
         elif isinstance(authentication, str):
-            client = Client.from_token(authentication)
-        elif isinstance(authentication, tuple):
-            client = Client.from_credentials(*authentication)
+            client = Client(authentication).init()
         else:
             raise TypeError("invalid authentication method provided")
 

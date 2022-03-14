@@ -63,17 +63,6 @@ async def async_authenticate_using_config_credentials(hass: HomeAssistantType) -
             else:
                 return token
 
-        else:
-            username = credential[CONF_USERNAME]
-            password = credential[CONF_PASSWORD]
-
-            try:
-                return await hass.async_add_executor_job(
-                    Client.from_credentials, username, password
-                )
-            except BaseException as e:
-                _LOGGER.debug(f'Could not get music token from "...{username[-6:]}": {e}')
-
     raise YandexMusicBrowserAuthenticationError("No credentials found to perform authentication")
 
 
