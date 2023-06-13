@@ -1,7 +1,7 @@
 {
   "domain": "yandex_music_browser",
   "name": "Yandex Music Browser",
-  "version": "v0.0.8",
+  "version": "v0.0.9",
   "documentation": "https://github.com/alryaz/hass-yandex-music-browser",
   "dependencies": [
     "http",
@@ -13,7 +13,7 @@
   ],
   "config_flow": true,
   "requirements": [
-    "yandex-music==2.0.1"
+    "yandex-music==2.1.1"
   ],
   "iot_class": "cloud_polling"
 }
