@@ -52,18 +52,8 @@ from typing import (
 )
 
 from homeassistant.components.media_player import BrowseError, BrowseMedia
-from homeassistant.components.media_player.const import (
-    MEDIA_CLASS_ALBUM,
-    MEDIA_CLASS_ARTIST,
-    MEDIA_CLASS_DIRECTORY,
-    MEDIA_CLASS_GENRE,
-    MEDIA_CLASS_PLAYLIST,
-    MEDIA_CLASS_TRACK,
-    MEDIA_TYPE_ALBUM,
-    MEDIA_TYPE_ARTIST,
-    MEDIA_TYPE_PLAYLIST,
-    MEDIA_TYPE_TRACK,
-)
+from homeassistant.components.media_player.const import MediaClass, MediaType
+
 from homeassistant.const import CONF_TIMEOUT
 from yaml import BaseLoader, YAMLError, load
 from yandex_music import (
@@ -1009,7 +999,7 @@ def adapt_directory_to_browse_processor(
             fetch_children: FetchChildrenType = True,
         ) -> BrowseGeneratorReturnType:
             if media_content_id is None:
-                media_content_id = MEDIA_CLASS_DIRECTORY
+                media_content_id = MediaClass.DIRECTORY
 
             if fetch_children:
                 fetch_children = int(fetch_children) - 1
@@ -1027,7 +1017,7 @@ def adapt_directory_to_browse_processor(
             title = browser.get_translation(_translation_key, "title")
 
             return YandexBrowseMedia(
-                media_class=MEDIA_CLASS_DIRECTORY,
+                media_class=MediaClass.DIRECTORY,
                 media_content_id=media_content_id,
                 media_content_type="",
                 title=title,
@@ -1154,7 +1144,7 @@ def user_processor(
 
     return YandexBrowseMedia(
         title=title,
-        media_class=MEDIA_CLASS_DIRECTORY,
+        media_class=MediaClass.DIRECTORY,
         media_content_type="user",
         media_content_id=media_content_id,
         children=children,
@@ -1205,14 +1195,14 @@ def library_processor(
         title = browser.get_translation(ROOT_MEDIA_CONTENT_TYPE, "folder")
 
     return YandexBrowseMedia(
-        media_class=MEDIA_CLASS_DIRECTORY,
+        media_class=MediaClass.DIRECTORY,
         media_content_type=ROOT_MEDIA_CONTENT_TYPE,
         media_content_id=str(media_id),
         title=title,
         can_play=False,
         can_expand=True,
         children=children,
-        children_media_class=MEDIA_CLASS_DIRECTORY,
+        children_media_class=MediaClass.DIRECTORY,
         thumbnail=level_definition[CONF_IMAGE],
     )
 
@@ -1259,7 +1249,7 @@ def generate_radio_object(
     return YandexBrowseMedia(
         title=browser.get_translation(MEDIA_TYPE_RADIO, "prefix", title=suffix),
         thumbnail=thumbnail,
-        media_class=MEDIA_CLASS_TRACK,
+        media_class=MediaClass.TRACK,
         media_content_id=radio_content_id,
         media_content_type=MEDIA_TYPE_RADIO,
         can_play=True,
@@ -1268,7 +1258,7 @@ def generate_radio_object(
 
 
 @register_type_browse_processor()
-@adapt_directory_to_browse_processor(children_media_class=MEDIA_CLASS_PLAYLIST)
+@adapt_directory_to_browse_processor(children_media_class=MediaClass.PLAYLIST)
 def personal_mixes_processor(
     browser: "YandexMusicBrowser", media_id: str
 ) -> Optional[List[Playlist]]:
@@ -1282,7 +1272,7 @@ def personal_mixes_processor(
 @register_type_browse_processor()
 @adapt_media_id_to_user_id
 @adapt_directory_to_browse_processor(
-    children_media_class=MEDIA_CLASS_DIRECTORY,
+    children_media_class=MediaClass.DIRECTORY,
     thumbnail="/blocks/playlist-cover/playlist-cover_like_2x.png",
 )
 def user_likes_processor(browser: "YandexMusicBrowser", media_id: str) -> List[Tuple[str, str]]:
@@ -1296,7 +1286,7 @@ def user_likes_processor(browser: "YandexMusicBrowser", media_id: str) -> List[T
 
 @register_type_browse_processor()
 @adapt_media_id_to_user_id
-@adapt_directory_to_browse_processor(children_media_class=MEDIA_CLASS_PLAYLIST)
+@adapt_directory_to_browse_processor(children_media_class=MediaClass.PLAYLIST)
 def user_playlists_processor(
     browser: "YandexMusicBrowser", media_id: str
 ) -> Optional[List[Playlist]]:
@@ -1305,7 +1295,7 @@ def user_playlists_processor(
 
 @register_type_browse_processor()
 @adapt_media_id_to_user_id
-@adapt_directory_to_browse_processor(children_media_class=MEDIA_CLASS_PLAYLIST)
+@adapt_directory_to_browse_processor(children_media_class=MediaClass.PLAYLIST)
 def user_liked_playlists_processor(
     browser: "YandexMusicBrowser", media_id: str
 ) -> Optional[List[Playlist]]:
@@ -1316,7 +1306,7 @@ def user_liked_playlists_processor(
 
 @register_type_browse_processor()
 @adapt_media_id_to_user_id
-@adapt_directory_to_browse_processor(children_media_class=MEDIA_CLASS_ARTIST)
+@adapt_directory_to_browse_processor(children_media_class=MediaClass.ARTIST)
 def user_liked_artists_processor(
     browser: "YandexMusicBrowser", media_id: str
 ) -> Optional[List[Artist]]:
@@ -1327,7 +1317,7 @@ def user_liked_artists_processor(
 
 @register_type_browse_processor()
 @adapt_media_id_to_user_id
-@adapt_directory_to_browse_processor(children_media_class=MEDIA_CLASS_ALBUM)
+@adapt_directory_to_browse_processor(children_media_class=MediaClass.ALBUM)
 def user_liked_albums_processor(
     browser: "YandexMusicBrowser", media_id: str
 ) -> Optional[List[Album]]:
@@ -1338,7 +1328,7 @@ def user_liked_albums_processor(
 
 @register_type_browse_processor()
 @adapt_media_id_to_user_id
-@adapt_directory_to_browse_processor(children_media_class=MEDIA_CLASS_TRACK)
+@adapt_directory_to_browse_processor(children_media_class=MediaClass.TRACK)
 def user_liked_tracks_processor(
     browser: "YandexMusicBrowser", media_id: str
 ) -> Optional[List[Track]]:
@@ -1350,7 +1340,7 @@ def user_liked_tracks_processor(
 
 
 @register_type_browse_processor()
-@adapt_directory_to_browse_processor(children_media_class=MEDIA_CLASS_GENRE)
+@adapt_directory_to_browse_processor(children_media_class=MediaClass.GENRE)
 def genres_processor(browser: "YandexMusicBrowser", media_id: str):
     items = browser.client.genres(timeout=browser.timeout)
     remove_genre_id = None
@@ -1366,7 +1356,7 @@ def genres_processor(browser: "YandexMusicBrowser", media_id: str):
 
 
 @register_type_browse_processor()
-@adapt_directory_to_browse_processor(children_media_class=MEDIA_CLASS_ALBUM)
+@adapt_directory_to_browse_processor(children_media_class=MediaClass.ALBUM)
 def new_releases_processor(browser: "YandexMusicBrowser", media_id: str) -> Optional[List[Album]]:
     landing_list = browser.client.new_releases(timeout=browser.timeout)
     if landing_list:
@@ -1376,7 +1366,7 @@ def new_releases_processor(browser: "YandexMusicBrowser", media_id: str) -> Opti
 
 
 @register_type_browse_processor()
-@adapt_directory_to_browse_processor(children_media_class=MEDIA_CLASS_PLAYLIST)
+@adapt_directory_to_browse_processor(children_media_class=MediaClass.PLAYLIST)
 def new_playlists_processor(
     browser: "YandexMusicBrowser", media_id: str
 ) -> Optional[List[Playlist]]:
@@ -1389,7 +1379,7 @@ def new_playlists_processor(
 
 
 @register_type_browse_processor()
-@adapt_directory_to_browse_processor(children_media_class=MEDIA_CLASS_PLAYLIST)
+@adapt_directory_to_browse_processor(children_media_class=MediaClass.PLAYLIST)
 def yandex_mixes_processor(
     browser: "YandexMusicBrowser", media_id: str
 ) -> Optional[List[Playlist]]:
@@ -1454,7 +1444,7 @@ def track_media_processor(
                                 title=line,
                                 media_content_id=str(media_object.id) + "_line_" + str(i),
                                 media_content_type="lyrics_line",
-                                media_class=MEDIA_CLASS_TRACK,
+                                media_class=MediaClass.TRACK,
                                 can_play=False,
                                 can_expand=False,
                                 thumbnail=THUMBNAIL_EMPTY_IMAGE,
@@ -1465,8 +1455,8 @@ def track_media_processor(
 
     return YandexBrowseMedia(
         title=track_title,
-        media_content_type=MEDIA_TYPE_TRACK,
-        media_class=MEDIA_CLASS_TRACK,
+        media_content_type=MediaType.TRACK,
+        media_class=MediaClass.TRACK,
         thumbnail=media_object.cover_uri,
         media_content_id=str(media_object.id),
         can_play=True,
@@ -1507,8 +1497,8 @@ def album_media_processor(
 
     return YandexBrowseMedia(
         title=media_object.title,
-        media_content_type=MEDIA_TYPE_ALBUM,
-        media_class=MEDIA_CLASS_ALBUM,
+        media_content_type=MediaType.ALBUM,
+        media_class=MediaClass.ALBUM,
         thumbnail=media_object.cover_uri,
         media_content_id=str(media_object.id),
         can_play=True,
@@ -1537,10 +1527,10 @@ def artist_media_processor(
 
     return YandexBrowseMedia(
         title=media_object.name,
-        media_content_type=MEDIA_TYPE_ARTIST,
-        media_class=MEDIA_CLASS_ARTIST,
+        media_content_type=MediaType.ARTIST,
+        media_class=MediaClass.ARTIST,
         thumbnail=media_object.cover.uri,
-        children_media_class=MEDIA_CLASS_ALBUM,
+        children_media_class=MediaClass.ALBUM,
         media_content_id=str(media_object.id),
         can_play=False,
         can_expand=True,
@@ -1564,13 +1554,13 @@ def playlist_media_processor(
 
     return YandexBrowseMedia(
         title=media_object.title,
-        media_content_type=MEDIA_TYPE_PLAYLIST,
-        media_class=MEDIA_CLASS_PLAYLIST,
+        media_content_type=MediaType.PLAYLIST,
+        media_class=MediaClass.PLAYLIST,
         thumbnail=media_object.animated_cover_uri or media_object.cover.uri,
         media_content_id=f"{media_object.owner.uid}:{media_object.kind}",
         can_play=True,
         can_expand=True,
-        children_media_class=MEDIA_CLASS_TRACK,
+        children_media_class=MediaClass.TRACK,
         children=children,
         media_object=media_object,
     )
@@ -1606,14 +1596,14 @@ def mix_link_media_processor(
     return YandexBrowseMedia(
         title=media_object.title,
         media_content_type=MEDIA_TYPE_MIX_TAG,
-        media_class=MEDIA_CLASS_DIRECTORY,
+        media_class=MediaClass.DIRECTORY,
         thumbnail=media_object.background_image_uri
         or media_object.cover_uri
         or media_object.cover_white,
         media_content_id=mix_link_tag,
         can_play=False,
         can_expand=True,
-        children_media_class=MEDIA_CLASS_PLAYLIST,
+        children_media_class=MediaClass.PLAYLIST,
         children=children,
     )
 
@@ -1637,12 +1627,12 @@ def tag_result_media_processor(
     return YandexBrowseMedia(
         title=tag.name,
         media_content_type=MEDIA_TYPE_MIX_TAG,
-        media_class=MEDIA_CLASS_DIRECTORY,
+        media_class=MediaClass.DIRECTORY,
         thumbnail=tag.og_image,
         media_content_id=tag.id,
         can_play=False,
         can_expand=True,
-        children_media_class=MEDIA_CLASS_PLAYLIST,
+        children_media_class=MediaClass.PLAYLIST,
         children=children,
     )
 
@@ -1700,16 +1690,16 @@ def genre_media_processor(
         title=media_object.title,
         media_content_type=MEDIA_TYPE_GENRE,
         media_content_id=media_object.id,
-        media_class=MEDIA_CLASS_DIRECTORY,
+        media_class=MediaClass.DIRECTORY,
         thumbnail=thumbnail,
         can_play=False,
         can_expand=True,
-        children_media_class=MEDIA_CLASS_PLAYLIST,
+        children_media_class=MediaClass.PLAYLIST,
         children=children,
     )
 
 
-@register_type_browse_processor(MEDIA_TYPE_ALBUM, media_id_pattern=r"\d+")
+@register_type_browse_processor(MediaType.ALBUM, media_id_pattern=r"\d+")
 @adapt_type_to_browse_processor()
 def album_type_processor(
     browser: "YandexMusicBrowser", media_content_id: MediaContentIDType
@@ -1719,7 +1709,7 @@ def album_type_processor(
         return albums[0]
 
 
-@register_type_browse_processor(MEDIA_TYPE_ARTIST, media_id_pattern=r"\d+")
+@register_type_browse_processor(MediaType.ARTIST, media_id_pattern=r"\d+")
 @adapt_type_to_browse_processor()
 def artist_type_processor(
     browser: "YandexMusicBrowser", media_content_id: MediaContentIDType
@@ -1729,7 +1719,7 @@ def artist_type_processor(
         return artists[0]
 
 
-@register_type_browse_processor(MEDIA_TYPE_PLAYLIST, media_id_pattern=r"(\d+:)?\d+")
+@register_type_browse_processor(MediaType.PLAYLIST, media_id_pattern=r"(\d+:)?\d+")
 @adapt_type_to_browse_processor()
 def playlist_type_processor(
     browser: "YandexMusicBrowser", media_content_id: MediaContentIDType
@@ -1743,7 +1733,7 @@ def playlist_type_processor(
     )
 
 
-@register_type_browse_processor(MEDIA_TYPE_TRACK, media_id_pattern=r"\d+")
+@register_type_browse_processor(MediaType.TRACK, media_id_pattern=r"\d+")
 @adapt_type_to_browse_processor()
 def track_type_processor(
     browser: "YandexMusicBrowser", media_content_id: MediaContentIDType

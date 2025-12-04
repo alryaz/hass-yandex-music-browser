@@ -1,15 +1,10 @@
 import logging
 from typing import Optional, TYPE_CHECKING, Union
 
-from homeassistant.components.media_player import MediaPlayerEntity, SUPPORT_BROWSE_MEDIA
-from homeassistant.components.media_player.const import (
-    MEDIA_TYPE_ALBUM,
-    MEDIA_TYPE_PLAYLIST,
-    MEDIA_TYPE_TRACK,
-)
+from homeassistant.components.media_player import MediaPlayerEntity, MediaPlayerEntityFeature
+from homeassistant.components.media_player.const import MediaType
 from homeassistant.core import callback
-from homeassistant.helpers.typing import HomeAssistantType
-
+from homeassistant.core import HomeAssistant
 from custom_components.yandex_music_browser.const import DATA_BROWSER, MEDIA_TYPE_RADIO
 from custom_components.yandex_music_browser.default import (
     async_get_music_browser,
@@ -44,8 +39,8 @@ def _get_yandex_entities():
 def _patch_yandex_station_get_attribute(self, attr: str):
     if attr == "supported_features":
         supported_features = object.__getattribute__(self, attr)
-        supported_features |= SUPPORT_BROWSE_MEDIA
-
+        # MediaPlayerEntityFeature — IntFlag, побитовое ИЛИ допустимо
+        supported_features |= MediaPlayerEntityFeature.BROWSE_MEDIA
         return supported_features
 
     elif attr == "async_play_media":
@@ -67,14 +62,14 @@ def _update_browse_object_for_cloud(
 
     if for_cloud:
         if browse_object.can_play:
-            if browse_object.media_content_type == MEDIA_TYPE_PLAYLIST:
+            if browse_object.media_content_type == MediaType.PLAYLIST:
                 # We can't play playlists that are not ours
                 if (
                     ":" in browse_object.media_content_id
                     and not browse_object.media_content_type.startswith(music_browser.user_id + ":")
                 ):
                     browse_object.can_play = False
-    elif browse_object.media_content_type == MEDIA_TYPE_PLAYLIST:
+    elif browse_object.media_content_type == MediaType.PLAYLIST:
         browse_object.can_play = True
 
     if browse_object.children:
@@ -91,25 +86,17 @@ async def _patch_yandex_station_async_play_media(
     if media_type in MAP_MEDIA_TYPE_TO_BROWSE:
         if self.local_state:
             if media_type in ("track", "playlist", "album", "artist", "radio"):
-                payload = {
-                    "command": "playMusic",
-                    "type": media_type,
-                    "id": media_id,
-                }
+                payload = {"command": "playMusic", "type": media_type, "id": media_id}
                 return await self.glagol.send(payload)
 
-        if media_type == MEDIA_TYPE_ALBUM:
+        if media_type == MediaType.ALBUM.value:
             command = "альбом " + media_id
-
-        elif media_type == MEDIA_TYPE_TRACK:
+        elif media_type == MediaType.TRACK.value:
             command = "трек " + media_id
-
         elif media_type == MEDIA_TYPE_RADIO:
             command = "радио " + media_id
-
-        elif media_type == MEDIA_TYPE_PLAYLIST:
+        elif media_type == MediaType.PLAYLIST.value:
             music_browser = self.hass.data.get(DATA_BROWSER)
-
             if ":" not in media_id:
                 playlist_id = media_id
             elif media_id.startswith(music_browser.user_id):
@@ -121,13 +108,10 @@ async def _patch_yandex_station_async_play_media(
             playlist_obj = await self.hass.async_add_executor_job(
                 music_browser.client.users_playlists, playlist_id
             )
-
             if playlist_obj is None:
                 _LOGGER.warning(f"Playlist not found: {media_id}")
                 return
-
             command = "плейлист " + playlist_obj.title
-
         else:
             _LOGGER.warning(f"Unsupported cloud media type: {media_type}")
             return
@@ -172,7 +156,7 @@ async def _async_authenticate_using_yandex_station(entity: "YandexStation") -> s
 #################################################################################
 
 
-def install(hass: HomeAssistantType):
+def install(hass: HomeAssistant):
     try:
         from custom_components.yandex_station.media_player import YandexStation
     except ImportError:
@@ -186,7 +170,7 @@ def install(hass: HomeAssistantType):
         _get_yandex_entities()
 
 
-def uninstall(hass: HomeAssistantType):
+def uninstall(hass: HomeAssistant):
     try:
         from custom_components.yandex_station.media_player import YandexStation
     except ImportError:
@@ -197,7 +181,7 @@ def uninstall(hass: HomeAssistantType):
             YandexStation.__getattribute__ = YandexStation.orig__getattribute__
 
 
-async def async_authenticate(on: Union[HomeAssistantType, "MediaPlayerEntity"]):
+async def async_authenticate(on: Union[HomeAssistant, "MediaPlayerEntity"]):
     try:
         from custom_components.yandex_station.media_player import YandexStation
     except ImportError:

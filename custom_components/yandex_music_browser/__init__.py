@@ -12,9 +12,16 @@ from typing import Any, Final, Mapping, Optional
 import homeassistant.helpers.config_validation as cv
 import voluptuous as vol
 from homeassistant.config_entries import ConfigEntry, SOURCE_IMPORT
-from homeassistant.const import *
+# from homeassistant.const import *
+from homeassistant.const import (
+    CONF_TIMEOUT,
+    CONF_SOURCE,
+    CONF_USERNAME,
+    CONF_PASSWORD,
+)
 from homeassistant.exceptions import ConfigEntryNotReady
-from homeassistant.helpers.typing import ConfigType, HomeAssistantType
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers.typing import ConfigType
 from homeassistant.loader import bind_hass
 
 from custom_components.yandex_music_browser.const import (
@@ -217,7 +224,7 @@ CONFIG_SCHEMA: Final = vol.Schema(
 #################################################################################
 
 
-async def async_setup(hass: HomeAssistantType, config: ConfigType) -> bool:
+async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     _LOGGER.debug("Begin component setup")
 
     domain_config = config.get(DOMAIN)
@@ -264,7 +271,7 @@ async def async_setup(hass: HomeAssistantType, config: ConfigType) -> bool:
 
 
 @bind_hass
-async def async_setup_entry(hass: HomeAssistantType, config_entry: ConfigEntry) -> bool:
+async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
     entry_id = config_entry.entry_id
     _LOGGER.debug(f"Begin entry setup: {entry_id}")
 
@@ -351,7 +358,7 @@ async def async_setup_entry(hass: HomeAssistantType, config_entry: ConfigEntry) 
 
 
 @bind_hass
-async def async_unload_entry(hass: HomeAssistantType, config_entry: ConfigEntry) -> bool:
+async def async_unload_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
     _LOGGER.debug(f"Begin entry unload: {config_entry.entry_id}")
 
     hass.data[DOMAIN] = None

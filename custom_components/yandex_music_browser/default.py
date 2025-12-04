@@ -5,7 +5,8 @@ from typing import Union
 import aiohttp
 from homeassistant.components.media_player import MediaPlayerEntity
 from homeassistant.const import CONF_PASSWORD, CONF_USERNAME
-from homeassistant.helpers.typing import HomeAssistantType
+from homeassistant.core import HomeAssistant
+
 from yandex_music import Client
 
 from custom_components.yandex_music_browser.const import (
@@ -43,7 +44,7 @@ async def async_get_music_token(x_token: str):
     return resp["access_token"]
 
 
-async def async_authenticate_using_config_credentials(hass: HomeAssistantType) -> "Client":
+async def async_authenticate_using_config_credentials(hass: HomeAssistant) -> "Client":
     config = hass.data[DOMAIN]
     credentials = config.get(CONF_CREDENTIALS)
 
@@ -67,7 +68,7 @@ async def async_authenticate_using_config_credentials(hass: HomeAssistantType) -
 
 
 async def async_get_music_browser(
-    entity: Union[MediaPlayerEntity, HomeAssistantType]
+    entity: Union[MediaPlayerEntity, HomeAssistant]
 ) -> YandexMusicBrowser:
     hass = entity.hass if isinstance(entity, MediaPlayerEntity) else entity
 
