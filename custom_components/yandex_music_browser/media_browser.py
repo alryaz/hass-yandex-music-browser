@@ -1539,7 +1539,11 @@ def artist_media_processor(
         title=media_object.name,
         media_content_type=MEDIA_TYPE_ARTIST,
         media_class=MEDIA_CLASS_ARTIST,
-        thumbnail=media_object.cover.uri,
+        thumbnail=(
+            media_object.cover.uri
+            if media_object.cover and media_object.cover.uri
+            else media_object.op_image
+        ),
         children_media_class=MEDIA_CLASS_ALBUM,
         media_content_id=str(media_object.id),
         can_play=False,
